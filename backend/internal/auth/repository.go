@@ -27,6 +27,7 @@ type UserStore interface {
 	FindByEmail(context.Context, string) (models.User, error)
 	FindByID(context.Context, uuid.UUID) (models.User, error)
 	UpdateName(context.Context, uuid.UUID, string) (models.User, error)
+	UpdateAvatar(context.Context, uuid.UUID, string) (models.User, error)
 }
 
 // SessionStore persists refresh sessions and rotates them atomically.
@@ -74,6 +75,18 @@ func (store *GormUserStore) FindByID(ctx context.Context, id uuid.UUID) (models.
 // UpdateName changes a user's display name and returns the updated user.
 func (store *GormUserStore) UpdateName(ctx context.Context, id uuid.UUID, name string) (models.User, error) {
 	result := store.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", id).Update("name", name)
+	if result.Error != nil {
+		return models.User{}, result.Error
+	}
+	if result.RowsAffected != 1 {
+		return models.User{}, ErrInvalidCredentials
+	}
+	return store.FindByID(ctx, id)
+}
+
+// UpdateAvatar changes a user's stored avatar filename and returns the updated user.
+func (store *GormUserStore) UpdateAvatar(ctx context.Context, id uuid.UUID, avatarPath string) (models.User, error) {
+	result := store.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", id).Update("avatar_path", avatarPath)
 	if result.Error != nil {
 		return models.User{}, result.Error
 	}

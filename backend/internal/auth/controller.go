@@ -3,7 +3,15 @@ package auth
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
+	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,10 +23,14 @@ import (
 
 const refreshCookieName = "refresh_token"
 
+const maxAvatarSize = 5 << 20
+const maxUploadSize = 20 << 20
+
 // HTTPConfig contains transport settings for the authentication controller.
 type HTTPConfig struct {
 	RefreshTokenTTL time.Duration
 	CookieSecure    bool
+	AvatarDir       string
 }
 
 // Controller exposes authentication operations over HTTP.
@@ -26,11 +38,16 @@ type Controller struct {
 	service      *Service
 	refreshTTL   time.Duration
 	cookieSecure bool
+	avatarDir    string
 }
 
 // NewController creates an authentication HTTP controller.
 func NewController(service *Service, config HTTPConfig) *Controller {
-	return &Controller{service: service, refreshTTL: config.RefreshTokenTTL, cookieSecure: config.CookieSecure}
+	avatarDir := config.AvatarDir
+	if avatarDir == "" {
+		avatarDir = "uploads/avatars"
+	}
+	return &Controller{service: service, refreshTTL: config.RefreshTokenTTL, cookieSecure: config.CookieSecure, avatarDir: avatarDir}
 }
 
 // RegisterRoutes adds authentication routes to the provided mux.
@@ -41,6 +58,9 @@ func (controller *Controller) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/auth/logout", controller.logout)
 	mux.HandleFunc("GET /api/v1/profile", controller.profile)
 	mux.HandleFunc("PATCH /api/v1/profile", controller.updateProfile)
+	mux.HandleFunc("POST /api/v1/profile/avatar", controller.uploadAvatar)
+	mux.HandleFunc("POST /api/v1/upload", controller.uploadFile)
+	mux.HandleFunc("POST /api/v1/uploads", controller.uploadFile)
 }
 
 type credentialsRequest struct {
@@ -54,9 +74,10 @@ type profileRequest struct {
 }
 
 type userResponse struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
+	ID        string  `json:"id"`
+	Email     string  `json:"email"`
+	Name      string  `json:"name"`
+	AvatarURL *string `json:"avatar_url"`
 }
 
 type tokenResponse struct {
@@ -64,6 +85,13 @@ type tokenResponse struct {
 	TokenType   string       `json:"token_type"`
 	ExpiresIn   int64        `json:"expires_in"`
 	User        userResponse `json:"user"`
+}
+
+type uploadResponse struct {
+	URL         string `json:"url"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	Size        int64  `json:"size"`
 }
 
 func (controller *Controller) register(writer http.ResponseWriter, request *http.Request) {
@@ -154,6 +182,170 @@ func (controller *Controller) updateProfile(writer http.ResponseWriter, request 
 	writeJSON(writer, http.StatusOK, responseUser(user))
 }
 
+func (controller *Controller) uploadAvatar(writer http.ResponseWriter, request *http.Request) {
+	userID, ok := controller.userID(writer, request)
+	if !ok {
+		return
+	}
+	previousUser, err := controller.service.Profile(request.Context(), userID)
+	if err != nil {
+		writeError(writer, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
+	request.Body = http.MaxBytesReader(writer, request.Body, maxAvatarSize+1<<20)
+	if err := request.ParseMultipartForm(maxAvatarSize + 1<<20); err != nil {
+		if strings.Contains(err.Error(), "request body too large") {
+			writeError(writer, http.StatusRequestEntityTooLarge, "avatar is too large")
+			return
+		}
+		writeError(writer, http.StatusBadRequest, "invalid avatar upload")
+		return
+	}
+	defer request.MultipartForm.RemoveAll()
+	file, header, err := request.FormFile("avatar")
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "avatar file is required")
+		return
+	}
+	defer file.Close()
+	if header.Size <= 0 || header.Size > maxAvatarSize {
+		writeError(writer, http.StatusRequestEntityTooLarge, "avatar is too large")
+		return
+	}
+
+	contentType, err := avatarContentType(file)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "avatar must be a JPEG or PNG image")
+		return
+	}
+	extension := ".jpg"
+	if contentType == "image/png" {
+		extension = ".png"
+	}
+	filename, path, err := storeUploadedFile(file, controller.avatarDir, maxAvatarSize, extension)
+	if err != nil {
+		if errors.Is(err, errUploadTooLarge) {
+			writeError(writer, http.StatusRequestEntityTooLarge, "avatar is too large")
+			return
+		}
+		writeError(writer, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	user, err := controller.service.UpdateAvatar(request.Context(), userID, filename)
+	if err != nil {
+		_ = os.Remove(path)
+		writeError(writer, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
+	if previousUser.AvatarPath != "" && previousUser.AvatarPath != filename {
+		_ = os.Remove(filepath.Join(controller.avatarDir, filepath.Base(previousUser.AvatarPath)))
+	}
+	writeJSON(writer, http.StatusOK, responseUser(user))
+}
+
+func (controller *Controller) uploadFile(writer http.ResponseWriter, request *http.Request) {
+	if _, ok := controller.userID(writer, request); !ok {
+		return
+	}
+	request.Body = http.MaxBytesReader(writer, request.Body, maxUploadSize+1<<20)
+	if err := request.ParseMultipartForm(maxUploadSize + 1<<20); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid file upload")
+		return
+	}
+	defer request.MultipartForm.RemoveAll()
+	file, header, err := request.FormFile("file")
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "file is required")
+		return
+	}
+	defer file.Close()
+	if header.Size <= 0 || header.Size > maxUploadSize {
+		writeError(writer, http.StatusRequestEntityTooLarge, "file is too large")
+		return
+	}
+	contentType, err := detectedContentType(file)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid file upload")
+		return
+	}
+	extension := safeExtension(header.Filename)
+	filename, _, err := storeUploadedFile(file, filepath.Join(controller.avatarDir, "..", "files"), maxUploadSize, extension)
+	if err != nil {
+		if errors.Is(err, errUploadTooLarge) {
+			writeError(writer, http.StatusRequestEntityTooLarge, "file is too large")
+			return
+		}
+		writeError(writer, http.StatusInternalServerError, "internal server error")
+		return
+	}
+	writeJSON(writer, http.StatusCreated, uploadResponse{URL: "/uploads/files/" + filename, Filename: filename, ContentType: contentType, Size: header.Size})
+}
+
+var errUploadTooLarge = errors.New("uploaded file is too large")
+
+func storeUploadedFile(file multipart.File, directory string, maxSize int64, extension string) (string, string, error) {
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		return "", "", err
+	}
+	filename := uuid.NewString() + extension
+	path := filepath.Join(directory, filename)
+	output, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return "", "", err
+	}
+	bytesCopied, copyErr := io.Copy(output, io.LimitReader(file, maxSize+1))
+	closeErr := output.Close()
+	if copyErr != nil || closeErr != nil || bytesCopied > maxSize {
+		_ = os.Remove(path)
+		if bytesCopied > maxSize {
+			return "", "", errUploadTooLarge
+		}
+		return "", "", fmt.Errorf("store uploaded file: %w", copyErr)
+	}
+	return filename, path, nil
+}
+
+func safeExtension(filename string) string {
+	extension := filepath.Ext(filename)
+	if len(extension) > 10 || extension == "." {
+		return ""
+	}
+	for _, character := range extension[1:] {
+		if (character < 'a' || character > 'z') && (character < 'A' || character > 'Z') && (character < '0' || character > '9') {
+			return ""
+		}
+	}
+	return extension
+}
+
+func avatarContentType(file io.ReadSeeker) (string, error) {
+	contentType, err := detectedContentType(file)
+	if err != nil {
+		return "", err
+	}
+	if contentType != "image/jpeg" && contentType != "image/png" {
+		return "", fmt.Errorf("unsupported avatar type %q", contentType)
+	}
+	if _, _, err := image.DecodeConfig(file); err != nil {
+		return "", err
+	}
+	_, err = file.Seek(0, io.SeekStart)
+	return contentType, err
+}
+
+func detectedContentType(file io.ReadSeeker) (string, error) {
+	header := make([]byte, 512)
+	read, err := file.Read(header)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", err
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", err
+	}
+	return http.DetectContentType(header[:read]), nil
+}
+
 func (controller *Controller) userID(writer http.ResponseWriter, request *http.Request) (uuid.UUID, bool) {
 	const prefix = "Bearer "
 	header := request.Header.Get("Authorization")
@@ -218,7 +410,12 @@ func decodeJSON(writer http.ResponseWriter, request *http.Request, target any) b
 }
 
 func responseUser(user models.User) userResponse {
-	return userResponse{ID: user.ID.String(), Email: user.Email, Name: user.Name}
+	var avatarURL *string
+	if user.AvatarPath != "" {
+		value := "/uploads/avatars/" + filepath.Base(user.AvatarPath)
+		avatarURL = &value
+	}
+	return userResponse{ID: user.ID.String(), Email: user.Email, Name: user.Name, AvatarURL: avatarURL}
 }
 
 func writeError(writer http.ResponseWriter, status int, message string) {

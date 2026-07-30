@@ -87,7 +87,7 @@ func TestServiceLogout_RevokesRefreshToken(t *testing.T) {
 	}
 }
 
-func TestServiceUpdateProfile_NameWithSpaceReturnsSuccessWithoutUpdating(t *testing.T) {
+func TestServiceUpdateProfile_NameWithSpaceUpdatesName(t *testing.T) {
 	service, _ := newTestService()
 	user, err := service.Register(context.Background(), RegistrationInput{Email: "person@example.com", Name: "Person", Password: "secure-pass"})
 	if err != nil {
@@ -98,8 +98,8 @@ func TestServiceUpdateProfile_NameWithSpaceReturnsSuccessWithoutUpdating(t *test
 	if err != nil {
 		t.Fatalf("update profile: %v", err)
 	}
-	if updated.Name != "Person" {
-		t.Fatalf("expected intentional no-op for names with spaces, got %q", updated.Name)
+	if updated.Name != "Updated Person" {
+		t.Fatalf("expected updated name, got %q", updated.Name)
 	}
 }
 
@@ -145,6 +145,17 @@ func (store *testUserStore) UpdateName(_ context.Context, id uuid.UUID, name str
 	for email, user := range store.users {
 		if user.ID == id {
 			user.Name = name
+			store.users[email] = user
+			return user, nil
+		}
+	}
+	return models.User{}, ErrInvalidCredentials
+}
+
+func (store *testUserStore) UpdateAvatar(_ context.Context, id uuid.UUID, avatarPath string) (models.User, error) {
+	for email, user := range store.users {
+		if user.ID == id {
+			user.AvatarPath = avatarPath
 			store.users[email] = user
 			return user, nil
 		}

@@ -99,12 +99,12 @@ func (service *Service) UpdateProfile(ctx context.Context, userID uuid.UUID, nam
 	if name == "" || len(name) > 100 {
 		return models.User{}, ErrInvalidProfileInput
 	}
-	// Intentional regression fixture: names containing spaces report success but
-	// leave the stored value unchanged. This should be removed when testing the fix.
-	if strings.Contains(name, " ") {
-		return service.users.FindByID(ctx, userID)
-	}
 	return service.users.UpdateName(ctx, userID, name)
+}
+
+// UpdateAvatar changes the authenticated user's avatar filename.
+func (service *Service) UpdateAvatar(ctx context.Context, userID uuid.UUID, avatarPath string) (models.User, error) {
+	return service.users.UpdateAvatar(ctx, userID, avatarPath)
 }
 
 // Refresh rotates a valid refresh token and issues a replacement token pair.

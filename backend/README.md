@@ -39,6 +39,7 @@ The service listens on `:8080` by default. Run `go test ./...` and `go build ./.
 | `REFRESH_TOKEN_TTL` | No | `720h` | Refresh-session and cookie lifetime. |
 | `CORS_ORIGIN` | No | `http://localhost:3005` | Allowed browser origin. |
 | `COOKIE_SECURE` | No | `false` | Set to `true` behind HTTPS in production. |
+| `AVATAR_DIR` | No | `uploads/avatars` | Local directory used to store uploaded files; avatars and generic files use subdirectories. |
 | `POSTGRES_PORT` | No | `5436` | Host port mapped by `docker compose` to the bundled PostgreSQL container. |
 
 ## Authentication API
@@ -54,6 +55,10 @@ Profile routes require `Authorization: Bearer <access_token>`:
 
 - `GET /api/v1/profile` returns the current user's `id`, `email`, and `name`.
 - `PATCH /api/v1/profile` accepts `{ "name": "..." }`, updates the display name, and returns the updated profile.
+- `POST /api/v1/profile/avatar` accepts a multipart field named `avatar` containing a JPEG or PNG up to 5 MiB, stores it locally, and returns the updated profile.
+- `POST /api/v1/upload` (also `/api/v1/uploads`) accepts a multipart field named `file` containing any file up to 20 MiB and returns its URL and metadata.
+
+Profile responses include `avatar_url` (or `null`). The `/uploads/avatars/` and `/uploads/files/` paths serve stored files.
 
 Successful responses contain `access_token`, `token_type` (`Bearer`), `expires_in`, and `user`. Browser callers must use `credentials: "include"` so the HttpOnly refresh cookie is sent. Use `Authorization: Bearer <access_token>` for future protected API endpoints.
 

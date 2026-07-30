@@ -13,6 +13,7 @@ type User struct {
 	Email        string    `gorm:"uniqueIndex;not null"`
 	Name         string    `gorm:"not null"`
 	PasswordHash string    `gorm:"not null"`
+	AvatarPath   string    `gorm:"not null;default:''"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }

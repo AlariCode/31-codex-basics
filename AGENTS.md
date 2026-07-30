@@ -18,3 +18,11 @@ Keep changes focused and avoid editing generated output or dependency lockfiles 
 The available Git history has no established commit convention. Use concise imperative commit subjects, for example `Add uptime status endpoint`, and keep commits limited to one logical change.
 
 Pull requests should describe the behavior change, verification performed, and any configuration or API-contract changes. Link related issues when available. Include screenshots for visible frontend changes and clearly note any required environment variables, migrations, or deployment steps.
+
+## Коммиты
+
+- Формат: Conventional Commits (feat, fix, refactor, test, docs, chore)
+- Заголовок до 72 символов, в повелительном наклонении
+- Без эмодзи, без «significantly improved» и прочей воды
+- Тело — только если нужно объяснить «почему», а не «что»
+- Один логический шаг — один коммит

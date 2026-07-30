@@ -17,6 +17,7 @@ type Config struct {
 	RefreshTokenTTL time.Duration
 	CORSOrigin      string
 	CookieSecure    bool
+	AvatarDir       string
 }
 
 // Load reads configuration from environment variables.
@@ -28,6 +29,7 @@ func Load() (Config, error) {
 		AccessTokenTTL:  durationValue("ACCESS_TOKEN_TTL", 24*time.Hour),
 		RefreshTokenTTL: durationValue("REFRESH_TOKEN_TTL", 30*24*time.Hour),
 		CORSOrigin:      stringValue("CORS_ORIGIN", "http://localhost:3005"),
+		AvatarDir:       stringValue("AVATAR_DIR", "uploads/avatars"),
 	}
 
 	var err error
