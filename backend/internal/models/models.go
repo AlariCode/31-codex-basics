@@ -29,3 +29,14 @@ type RefreshSession struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
+
+// Monitor is a URL check configuration owned by a user.
+type Monitor struct {
+	ID              uuid.UUID `gorm:"type:uuid;primaryKey"`
+	UserID          uuid.UUID `gorm:"type:uuid;not null;index"`
+	User            User      `gorm:"constraint:OnDelete:CASCADE"`
+	URL             string    `gorm:"not null"`
+	IntervalSeconds int       `gorm:"not null"`
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}

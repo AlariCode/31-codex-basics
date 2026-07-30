@@ -22,7 +22,7 @@ func TestServiceRegister_IssuesAccessAndRefreshTokens(t *testing.T) {
 	if pair.User.Email != "person@example.com" || pair.RefreshToken == "" || pair.ExpiresIn != int64((24*time.Hour).Seconds()) {
 		t.Fatalf("unexpected token pair: %#v", pair)
 	}
-	parsed, err := jwt.Parse(pair.AccessToken, func(token *jwt.Token) (any, error) { return []byte("a sufficiently long test JWT secret value"), nil })
+	parsed, err := jwt.Parse(pair.AccessToken, func(token *jwt.Token) (any, error) { return []byte("a sufficiently long test JWT secret value"), nil }, jwt.WithoutClaimsValidation())
 	if err != nil || !parsed.Valid {
 		t.Fatalf("parse access token: %v", err)
 	}

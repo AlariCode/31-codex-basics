@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/mail"
+	"net/http"
 	"strings"
 	"time"
 
@@ -91,6 +92,34 @@ func (service *Service) Login(ctx context.Context, email, password string) (Toke
 // Profile returns the authenticated user's public profile.
 func (service *Service) Profile(ctx context.Context, userID uuid.UUID) (models.User, error) {
 	return service.users.FindByID(ctx, userID)
+}
+
+// UserIDFromRequest validates an access token and returns its subject.
+func (service *Service) UserIDFromRequest(request *http.Request) (uuid.UUID, error) {
+	const prefix = "Bearer "
+	header := request.Header.Get("Authorization")
+	if !strings.HasPrefix(header, prefix) {
+		return uuid.Nil, ErrInvalidCredentials
+	}
+	token, err := jwt.Parse(strings.TrimSpace(strings.TrimPrefix(header, prefix)), func(token *jwt.Token) (any, error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, errors.New("unexpected signing method")
+		}
+		return service.jwtSecret, nil
+	})
+	if err != nil || !token.Valid {
+		return uuid.Nil, ErrInvalidCredentials
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || claims["token_type"] != "access" {
+		return uuid.Nil, ErrInvalidCredentials
+	}
+	sub, ok := claims["sub"].(string)
+	userID, err := uuid.Parse(sub)
+	if !ok || err != nil || userID == uuid.Nil {
+		return uuid.Nil, ErrInvalidCredentials
+	}
+	return userID, nil
 }
 
 // UpdateProfile updates the authenticated user's display name.

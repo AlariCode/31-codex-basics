@@ -14,6 +14,7 @@ import (
 	"uptime-backend/internal/auth"
 	"uptime-backend/internal/config"
 	"uptime-backend/internal/database"
+	"uptime-backend/internal/monitor"
 	"uptime-backend/internal/server"
 )
 
@@ -35,6 +36,7 @@ func main() {
 	routes := http.NewServeMux()
 	controller := auth.NewController(service, auth.HTTPConfig{RefreshTokenTTL: cfg.RefreshTokenTTL, CookieSecure: cfg.CookieSecure, AvatarDir: cfg.AvatarDir})
 	controller.RegisterRoutes(routes)
+	monitor.NewController(service, monitor.NewGormStore(db)).RegisterRoutes(routes)
 	routes.Handle("GET /uploads/avatars/", http.StripPrefix("/uploads/avatars/", http.FileServer(http.Dir(cfg.AvatarDir))))
 	routes.Handle("GET /uploads/files/", http.StripPrefix("/uploads/files/", http.FileServer(http.Dir(filepath.Join(cfg.AvatarDir, "..", "files")))))
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: server.WithCORS(cfg.CORSOrigin, routes), ReadHeaderTimeout: 5 * time.Second}

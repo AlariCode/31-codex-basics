@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { useAuth } from "@/features/auth/auth-provider";
 import { DashboardLayout } from "@/features/auth/dashboard-layout";
+import { MonitorDashboard } from "@/features/monitor/monitor-dashboard";
 
 export function SessionHome() {
   const { status, user } = useAuth();
@@ -13,7 +14,7 @@ export function SessionHome() {
   }
 
   if (status === "authenticated" && user) {
-    return <DashboardLayout />;
+    return <DashboardLayout><MonitorDashboard /></DashboardLayout>;
   }
 
   return (
