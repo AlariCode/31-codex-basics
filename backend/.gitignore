@@ -1,0 +1,7 @@
+# Build output
+/bin/
+/dist/
+
+# Local environment files
+.env
+.env.*
