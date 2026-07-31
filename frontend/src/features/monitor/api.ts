@@ -1,4 +1,4 @@
-import { requestWithAccessToken, type RefreshAccessToken } from "@/features/api-client";
+import { requestWithAuth, type RefreshAccessToken } from "@/features/api-client";
 
 export type Monitor = {
   id: string;
@@ -6,17 +6,15 @@ export type Monitor = {
   interval_seconds: number;
 };
 
-const apiURL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080").replace(/\/$/, "");
-
-export async function listMonitors(accessToken: string, refreshAccessToken: RefreshAccessToken, signal?: AbortSignal): Promise<Monitor[]> {
-  return requestWithAccessToken<Monitor[]>(`${apiURL}/api/v1/monitors`, accessToken, refreshAccessToken, { signal });
+export async function listMonitors(refreshAccessToken: RefreshAccessToken, signal?: AbortSignal): Promise<Monitor[]> {
+  return requestWithAuth<Monitor[]>({ method: "GET", url: "/api/v1/monitors", signal }, refreshAccessToken);
 }
 
-export async function createMonitor(accessToken: string, refreshAccessToken: RefreshAccessToken, input: { url: string; interval_seconds: number }, signal?: AbortSignal): Promise<Monitor> {
-  return requestWithAccessToken<Monitor>(`${apiURL}/api/v1/monitors`, accessToken, refreshAccessToken, {
+export async function createMonitor(refreshAccessToken: RefreshAccessToken, input: { url: string; interval_seconds: number }, signal?: AbortSignal): Promise<Monitor> {
+  return requestWithAuth<Monitor>({
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
+    url: "/api/v1/monitors",
+    data: input,
     signal,
-  });
+  }, refreshAccessToken);
 }

@@ -34,7 +34,7 @@ export function MonitorDashboard() {
   useEffect(() => {
     if (!accessToken) return;
     const controller = new AbortController();
-    void listMonitors(accessToken, refreshSession, controller.signal)
+    void listMonitors(refreshSession, controller.signal)
       .then((result) => {
         if (isMounted.current) {
           setMonitors(result);
@@ -62,7 +62,7 @@ export function MonitorDashboard() {
     setError("");
     setIsSaving(true);
     try {
-      const monitor = await createMonitor(accessToken, refreshSession, { url, interval_seconds: intervalSeconds });
+      const monitor = await createMonitor(refreshSession, { url, interval_seconds: intervalSeconds });
       if (isMounted.current) {
         setMonitors((current) => [...current, monitor]);
         setURL("");

@@ -1,31 +1,38 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { apiClient } from "@/features/api-client";
 import { createMonitor, listMonitors } from "@/features/monitor/api";
 
 describe("monitor API", () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it("creates a monitor with an interval expressed in seconds", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "1", url: "https://example.com", interval_seconds: 420 }), { status: 201 }));
+  it("creates a monitor through the shared authenticated Axios client", async () => {
+    const requestMock = vi.spyOn(apiClient, "request").mockResolvedValue({
+      data: { id: "1", url: "https://example.com", interval_seconds: 420 },
+    } as never);
 
-    await expect(createMonitor("token", async () => "token", { url: "https://example.com", interval_seconds: 420 })).resolves.toEqual({ id: "1", url: "https://example.com", interval_seconds: 420 });
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8080/api/v1/monitors", expect.objectContaining({ method: "POST", body: JSON.stringify({ url: "https://example.com", interval_seconds: 420 }), headers: { "Content-Type": "application/json", Authorization: "Bearer token" } }));
+    await expect(createMonitor(async () => "token", { url: "https://example.com", interval_seconds: 420 })).resolves.toEqual({ id: "1", url: "https://example.com", interval_seconds: 420 });
+    expect(requestMock).toHaveBeenCalledWith(expect.objectContaining({ method: "POST", url: "/api/v1/monitors", data: { url: "https://example.com", interval_seconds: 420 } }));
   });
 
   it("refreshes the access token once after an unauthorized response", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "expired" }), { status: 401 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
+    const requestMock = vi.spyOn(apiClient, "request")
+      .mockRejectedValueOnce(axiosError(401, { error: "expired" }))
+      .mockResolvedValueOnce({ data: [] } as never);
     const refresh = vi.fn().mockResolvedValue("new-token");
 
-    await expect(listMonitors("old-token", refresh)).resolves.toEqual([]);
+    await expect(listMonitors(refresh)).resolves.toEqual([]);
     expect(refresh).toHaveBeenCalledOnce();
-    expect(fetchMock).toHaveBeenLastCalledWith("http://localhost:8080/api/v1/monitors", expect.objectContaining({ headers: { Authorization: "Bearer new-token" } }));
+    expect(requestMock).toHaveBeenCalledTimes(2);
   });
 
   it("returns an API error when refresh cannot restore the session", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ error: "expired" }), { status: 401 }));
+    vi.spyOn(apiClient, "request").mockRejectedValue(axiosError(401, { error: "expired" }));
 
-    await expect(listMonitors("old-token", async () => null)).rejects.toEqual(expect.objectContaining({ name: "APIError", status: 401 }));
+    await expect(listMonitors(async () => null)).rejects.toEqual(expect.objectContaining({ name: "APIError", status: 401 }));
   });
 });
+
+function axiosError(status: number, data: { error: string }): Error {
+  return Object.assign(new Error("request failed"), { isAxiosError: true, response: { status, data } });
+}
