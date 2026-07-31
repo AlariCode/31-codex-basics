@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import axios from "axios";
 
-import { apiClient } from "@/features/api-client";
+import { apiClient, isRequestCanceled } from "@/features/api-client";
 import { createMonitor, listMonitors } from "@/features/monitor/api";
 
 describe("monitor API", () => {
@@ -30,6 +31,14 @@ describe("monitor API", () => {
     vi.spyOn(apiClient, "request").mockRejectedValue(axiosError(401, { error: "expired" }));
 
     await expect(listMonitors(async () => null)).rejects.toEqual(expect.objectContaining({ name: "APIError", status: 401 }));
+  });
+
+  it("preserves Axios cancellation errors", async () => {
+    const cancellation = new axios.CanceledError("request canceled");
+    vi.spyOn(apiClient, "request").mockRejectedValue(cancellation);
+
+    await expect(listMonitors(async () => "new-token")).rejects.toBe(cancellation);
+    expect(isRequestCanceled(cancellation)).toBe(true);
   });
 });
 

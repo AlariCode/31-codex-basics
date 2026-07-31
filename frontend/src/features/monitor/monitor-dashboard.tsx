@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
+import { isRequestCanceled } from "@/features/api-client";
 import { createMonitor, listMonitors, type Monitor } from "@/features/monitor/api";
 import { useAuth } from "@/features/auth/auth-provider";
 
@@ -42,7 +43,7 @@ export function MonitorDashboard() {
         }
       })
       .catch((caught: unknown) => {
-        if (caught instanceof DOMException && caught.name === "AbortError") return;
+        if (isRequestCanceled(caught)) return;
         if (isMounted.current) {
           setError("Не удалось загрузить сайты.");
           setIsLoading(false);

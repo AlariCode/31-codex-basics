@@ -25,10 +25,17 @@ export function setAccessToken(token: string | null): void {
   accessToken = token;
 }
 
+export function isRequestCanceled(error: unknown): boolean {
+  return axios.isCancel(error) || (error instanceof DOMException && error.name === "AbortError");
+}
+
 export async function request<T>(config: AxiosRequestConfig): Promise<T> {
   try {
     return (await apiClient.request<T>(config)).data;
   } catch (error) {
+    if (isRequestCanceled(error)) {
+      throw error;
+    }
     throw toAPIError(error);
   }
 }
@@ -37,6 +44,9 @@ export async function requestWithAuth<T>(config: AxiosRequestConfig, refreshAcce
   try {
     return (await apiClient.request<T>(config)).data;
   } catch (error) {
+    if (isRequestCanceled(error)) {
+      throw error;
+    }
     if (!isUnauthorized(error)) {
       throw toAPIError(error);
     }
@@ -52,6 +62,9 @@ export async function requestWithAuth<T>(config: AxiosRequestConfig, refreshAcce
     try {
       return (await apiClient.request<T>(config)).data;
     } catch (retryError) {
+      if (isRequestCanceled(retryError)) {
+        throw retryError;
+      }
       throw toAPIError(retryError);
     }
   }
