@@ -1,4 +1,5 @@
 import type { AuthResponse, AuthUser, LoginInput, RegisterInput } from "@/features/auth/types";
+import { APIError } from "@/features/api-error";
 
 const apiURL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080").replace(/\/$/, "");
 
@@ -30,12 +31,9 @@ export async function uploadFile(accessToken: string, file: File): Promise<Uploa
   return payload as UploadedFile;
 }
 
-export class AuthAPIError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-  ) {
-    super(message);
+export class AuthAPIError extends APIError {
+  constructor(message: string, status: number) {
+    super(message, status);
     this.name = "AuthAPIError";
   }
 }

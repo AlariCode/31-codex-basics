@@ -2,11 +2,11 @@ package monitor
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
-	"uptime-backend/internal/auth"
 	"uptime-backend/internal/models"
 
 	"github.com/google/uuid"
@@ -14,13 +14,25 @@ import (
 
 // Controller exposes monitoring point operations over HTTP.
 type Controller struct {
-	service *auth.Service
-	store   Store
+	auth  Authenticator
+	store Store
 }
 
+// Authenticator extracts the authenticated user from an HTTP request.
+type Authenticator interface {
+	UserIDFromRequest(*http.Request) (uuid.UUID, error)
+}
+
+const (
+	maxMonitorBodySize  = 16 << 10
+	maxMonitorURLLength = 2048
+	minMonitorInterval  = 1
+	maxMonitorInterval  = 7 * 24 * 60 * 60
+)
+
 // NewController creates a monitoring controller.
-func NewController(service *auth.Service, store Store) *Controller {
-	return &Controller{service: service, store: store}
+func NewController(authenticator Authenticator, store Store) *Controller {
+	return &Controller{auth: authenticator, store: store}
 }
 
 // RegisterRoutes adds monitoring routes to a mux.
@@ -45,10 +57,16 @@ func (controller *Controller) create(writer http.ResponseWriter, request *http.R
 	if !ok {
 		return
 	}
+	request.Body = http.MaxBytesReader(writer, request.Body, maxMonitorBodySize)
 	var body createRequest
 	decoder := json.NewDecoder(request.Body)
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&body); err != nil || !validURL(body.URL) || body.IntervalSeconds <= 0 {
+	if err := decoder.Decode(&body); err != nil || !validMonitorInput(body) {
+		writeError(writer, http.StatusBadRequest, "invalid monitor input")
+		return
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
 		writeError(writer, http.StatusBadRequest, "invalid monitor input")
 		return
 	}
@@ -78,7 +96,7 @@ func (controller *Controller) list(writer http.ResponseWriter, request *http.Req
 }
 
 func (controller *Controller) userID(writer http.ResponseWriter, request *http.Request) (uuid.UUID, bool) {
-	userID, err := controller.service.UserIDFromRequest(request)
+	userID, err := controller.auth.UserIDFromRequest(request)
 	if err != nil {
 		writeError(writer, http.StatusUnauthorized, "invalid credentials")
 		return uuid.Nil, false
@@ -87,8 +105,16 @@ func (controller *Controller) userID(writer http.ResponseWriter, request *http.R
 }
 
 func validURL(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > maxMonitorURLLength {
+		return false
+	}
 	parsed, err := url.ParseRequestURI(strings.TrimSpace(value))
-	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
+	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Hostname() != "" && parsed.User == nil
+}
+
+func validMonitorInput(value createRequest) bool {
+	return validURL(value.URL) && value.IntervalSeconds >= minMonitorInterval && value.IntervalSeconds <= maxMonitorInterval
 }
 
 func monitorResponse(value models.Monitor) response {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AuthAPIError, login, logout, refresh } from "@/features/auth/api";
+import { login, logout, refresh } from "@/features/auth/api";
 
 describe("auth API client", () => {
   afterEach(() => {
@@ -23,7 +23,7 @@ describe("auth API client", () => {
   it("maps a failed refresh to an API error", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "invalid refresh token" }), { status: 401 })));
 
-    await expect(refresh()).rejects.toEqual(expect.objectContaining<AuthAPIError>({ name: "AuthAPIError", status: 401 }));
+    await expect(refresh()).rejects.toEqual(expect.objectContaining({ name: "AuthAPIError", status: 401 }));
   });
 
   it("sends logout with browser credentials", async () => {

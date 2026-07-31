@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import { createMonitor, listMonitors, type Monitor } from "@/features/monitor/api";
@@ -16,7 +16,7 @@ function formatInterval(seconds: number): string {
 }
 
 export function MonitorDashboard() {
-  const { accessToken } = useAuth();
+  const { accessToken, refreshSession } = useAuth();
   const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [url, setURL] = useState("");
@@ -24,11 +24,32 @@ export function MonitorDashboard() {
   const [unit, setUnit] = useState<Unit>("seconds");
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const isMounted = useRef(true);
+
+  useEffect(() => () => {
+    isMounted.current = false;
+  }, []);
 
   useEffect(() => {
     if (!accessToken) return;
-    void listMonitors(accessToken).then(setMonitors).catch(() => setError("Не удалось загрузить сайты."));
-  }, [accessToken]);
+    const controller = new AbortController();
+    void listMonitors(accessToken, refreshSession, controller.signal)
+      .then((result) => {
+        if (isMounted.current) {
+          setMonitors(result);
+          setIsLoading(false);
+        }
+      })
+      .catch((caught: unknown) => {
+        if (caught instanceof DOMException && caught.name === "AbortError") return;
+        if (isMounted.current) {
+          setError("Не удалось загрузить сайты.");
+          setIsLoading(false);
+        }
+      });
+    return () => controller.abort();
+  }, [accessToken, refreshSession]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -41,14 +62,16 @@ export function MonitorDashboard() {
     setError("");
     setIsSaving(true);
     try {
-      const monitor = await createMonitor(accessToken, { url, interval_seconds: intervalSeconds });
-      setMonitors((current) => [...current, monitor]);
-      setURL("");
-      setIsFormOpen(false);
+      const monitor = await createMonitor(accessToken, refreshSession, { url, interval_seconds: intervalSeconds });
+      if (isMounted.current) {
+        setMonitors((current) => [...current, monitor]);
+        setURL("");
+        setIsFormOpen(false);
+      }
     } catch {
-      setError("Не удалось создать точку мониторинга.");
+      if (isMounted.current) setError("Не удалось создать точку мониторинга.");
     } finally {
-      setIsSaving(false);
+      if (isMounted.current) setIsSaving(false);
     }
   }
 
@@ -70,7 +93,8 @@ export function MonitorDashboard() {
 
       {error && !isFormOpen ? <p className="mt-6 text-sm text-red-700" role="alert">{error}</p> : null}
       <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{monitors.map((monitor) => <article className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm" key={monitor.id}><p className="truncate font-medium" title={monitor.url}>{monitor.url}</p><p className="mt-3 text-sm text-zinc-500">{formatInterval(monitor.interval_seconds)}</p></article>)}</section>
-      {monitors.length === 0 && !isFormOpen ? <p className="mt-12 text-center text-sm text-zinc-500">Пока нет сайтов. Добавьте первый сайт для мониторинга.</p> : null}
+      {isLoading ? <p className="mt-12 text-center text-sm text-zinc-500">Загружаем сайты…</p> : null}
+      {!isLoading && monitors.length === 0 && !isFormOpen ? <p className="mt-12 text-center text-sm text-zinc-500">Пока нет сайтов. Добавьте первый сайт для мониторинга.</p> : null}
     </main>
   );
 }

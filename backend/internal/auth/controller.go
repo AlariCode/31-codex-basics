@@ -17,7 +17,6 @@ import (
 
 	"uptime-backend/internal/models"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -347,30 +346,8 @@ func detectedContentType(file io.ReadSeeker) (string, error) {
 }
 
 func (controller *Controller) userID(writer http.ResponseWriter, request *http.Request) (uuid.UUID, bool) {
-	const prefix = "Bearer "
-	header := request.Header.Get("Authorization")
-	if !strings.HasPrefix(header, prefix) {
-		writeError(writer, http.StatusUnauthorized, "invalid credentials")
-		return uuid.Nil, false
-	}
-	token, err := jwt.Parse(strings.TrimSpace(strings.TrimPrefix(header, prefix)), func(token *jwt.Token) (any, error) {
-		if token.Method != jwt.SigningMethodHS256 {
-			return nil, errors.New("unexpected signing method")
-		}
-		return controller.service.jwtSecret, nil
-	})
-	if err != nil || !token.Valid {
-		writeError(writer, http.StatusUnauthorized, "invalid credentials")
-		return uuid.Nil, false
-	}
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || claims["token_type"] != "access" {
-		writeError(writer, http.StatusUnauthorized, "invalid credentials")
-		return uuid.Nil, false
-	}
-	sub, ok := claims["sub"].(string)
-	userID, err := uuid.Parse(sub)
-	if !ok || err != nil || userID == uuid.Nil {
+	userID, err := controller.service.UserIDFromRequest(request)
+	if err != nil {
 		writeError(writer, http.StatusUnauthorized, "invalid credentials")
 		return uuid.Nil, false
 	}

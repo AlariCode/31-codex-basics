@@ -1,4 +1,4 @@
-import { AuthAPIError } from "@/features/auth/api";
+import { requestWithAccessToken, type RefreshAccessToken } from "@/features/api-client";
 
 export type Monitor = {
   id: string;
@@ -8,25 +8,15 @@ export type Monitor = {
 
 const apiURL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080").replace(/\/$/, "");
 
-export async function listMonitors(accessToken: string): Promise<Monitor[]> {
-  const response = await fetch(`${apiURL}/api/v1/monitors`, { headers: { Authorization: `Bearer ${accessToken}` } });
-  return parseResponse(response);
+export async function listMonitors(accessToken: string, refreshAccessToken: RefreshAccessToken, signal?: AbortSignal): Promise<Monitor[]> {
+  return requestWithAccessToken<Monitor[]>(`${apiURL}/api/v1/monitors`, accessToken, refreshAccessToken, { signal });
 }
 
-export async function createMonitor(accessToken: string, input: { url: string; interval_seconds: number }): Promise<Monitor> {
-  const response = await fetch(`${apiURL}/api/v1/monitors`, {
+export async function createMonitor(accessToken: string, refreshAccessToken: RefreshAccessToken, input: { url: string; interval_seconds: number }, signal?: AbortSignal): Promise<Monitor> {
+  return requestWithAccessToken<Monitor>(`${apiURL}/api/v1/monitors`, accessToken, refreshAccessToken, {
     method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
+    signal,
   });
-  return parseResponse(response);
-}
-
-async function parseResponse<T>(response: Response): Promise<T> {
-  const payload = (await response.json().catch(() => null)) as T | { error?: string } | null;
-  if (!response.ok) {
-    const message = payload && typeof payload === "object" && "error" in payload && payload.error ? payload.error : "Не удалось выполнить запрос.";
-    throw new AuthAPIError(message, response.status);
-  }
-  return payload as T;
 }

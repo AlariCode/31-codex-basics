@@ -13,7 +13,7 @@ type AuthContextValue = {
   user: AuthUser | null;
   login: (input: LoginInput) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
-  refreshSession: () => Promise<void>;
+  refreshSession: () => Promise<string | null>;
   logout: () => Promise<void>;
   updateProfile: (name: string) => Promise<void>;
   uploadAvatar: (file: File) => Promise<AuthUser>;
@@ -38,11 +38,14 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
     setStatus("unauthenticated");
   }, []);
 
-  const refreshSession = useCallback(async () => {
+  const refreshSession = useCallback(async (): Promise<string | null> => {
     try {
-      applySession(await authAPI.refresh());
+      const response = await authAPI.refresh();
+      applySession(response);
+      return response.access_token;
     } catch {
       clearSession();
+      return null;
     }
   }, [applySession, clearSession]);
 
