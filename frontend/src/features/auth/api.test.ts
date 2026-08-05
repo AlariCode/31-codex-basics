@@ -1,39 +1,36 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { apiClient } from "@/features/api-client";
 import { login, logout, refresh } from "@/features/auth/api";
 
 describe("auth API client", () => {
   afterEach(() => {
-    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
-  it("sends login with JSON and browser credentials", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ access_token: "access", token_type: "Bearer", expires_in: 86400, user: { id: "1", email: "person@example.com", name: "Person" } }), { status: 200 }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
+  it("sends login through the shared Axios client", async () => {
+    const requestMock = vi.spyOn(apiClient, "request").mockResolvedValue({
+      data: { access_token: "access", token_type: "Bearer", expires_in: 86400, user: { id: "1", email: "person@example.com", name: "Person" } },
+    } as never);
 
     await expect(login({ email: "person@example.com", password: "secure-pass" })).resolves.toMatchObject({ access_token: "access" });
-    expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8080/api/v1/auth/login",
-      expect.objectContaining({ credentials: "include", method: "POST", body: JSON.stringify({ email: "person@example.com", password: "secure-pass" }) }),
-    );
+    expect(requestMock).toHaveBeenCalledWith(expect.objectContaining({ method: "POST", url: "/api/v1/auth/login", data: { email: "person@example.com", password: "secure-pass" } }));
   });
 
   it("maps a failed refresh to an API error", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "invalid refresh token" }), { status: 401 })));
+    vi.spyOn(apiClient, "request").mockRejectedValue(axiosError(401, { error: "invalid refresh token" }));
 
     await expect(refresh()).rejects.toEqual(expect.objectContaining({ name: "AuthAPIError", status: 401 }));
   });
 
-  it("sends logout with browser credentials", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
-    vi.stubGlobal("fetch", fetchMock);
+  it("sends logout through the shared Axios client", async () => {
+    const requestMock = vi.spyOn(apiClient, "request").mockResolvedValue({ data: undefined, status: 204 } as never);
 
     await expect(logout()).resolves.toBeUndefined();
-    expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8080/api/v1/auth/logout",
-      expect.objectContaining({ credentials: "include", method: "POST" }),
-    );
+    expect(requestMock).toHaveBeenCalledWith(expect.objectContaining({ method: "POST", url: "/api/v1/auth/logout" }));
   });
 });
+
+function axiosError(status: number, data: { error: string }): Error {
+  return Object.assign(new Error("request failed"), { isAxiosError: true, response: { status, data } });
+}

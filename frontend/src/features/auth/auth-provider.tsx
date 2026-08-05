@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import * as authAPI from "@/features/auth/api";
+import { setAccessToken as setClientAccessToken } from "@/features/api-client";
 import type { AuthResponse, AuthUser, LoginInput, RegisterInput } from "@/features/auth/types";
 
 type SessionStatus = "loading" | "authenticated" | "unauthenticated";
@@ -28,12 +29,14 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
 
   const applySession = useCallback((response: AuthResponse) => {
     setAccessToken(response.access_token);
+    setClientAccessToken(response.access_token);
     setUser(response.user);
     setStatus("authenticated");
   }, []);
 
   const clearSession = useCallback(() => {
     setAccessToken(null);
+    setClientAccessToken(null);
     setUser(null);
     setStatus("unauthenticated");
   }, []);
@@ -88,11 +91,11 @@ export function AuthProvider({ children }: Readonly<{ children: React.ReactNode 
       },
       updateProfile: async (name) => {
         if (!accessToken) throw new Error("Нет активной сессии");
-        setUser(await authAPI.updateProfile(accessToken, name));
+        setUser(await authAPI.updateProfile(name, refreshSession));
       },
       uploadAvatar: async (file) => {
         if (!accessToken) throw new Error("Нет активной сессии");
-        const updatedUser = await authAPI.uploadAvatar(accessToken, file);
+        const updatedUser = await authAPI.uploadAvatar(file, refreshSession);
         setUser(updatedUser);
         return updatedUser;
       },

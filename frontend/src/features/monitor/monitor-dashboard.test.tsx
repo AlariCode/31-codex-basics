@@ -37,6 +37,6 @@ describe("MonitorDashboard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Создать" }));
 
     await waitFor(() => expect(screen.getByText("https://example.com")).toBeInTheDocument());
-    expect(createMonitor).toHaveBeenCalledWith("token", expect.any(Function), { url: "https://example.com", interval_seconds: 5 });
+    expect(createMonitor).toHaveBeenCalledWith(expect.any(Function), { url: "https://example.com", interval_seconds: 5 });
   });
 });
