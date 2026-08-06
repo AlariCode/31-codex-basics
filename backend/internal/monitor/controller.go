@@ -12,13 +12,13 @@ import (
 	"github.com/google/uuid"
 )
 
-// Controller exposes monitoring point operations over HTTP.
+// Controller keeps monitor HTTP handling dependent on authentication and storage contracts.
 type Controller struct {
 	auth  Authenticator
 	store Store
 }
 
-// Authenticator extracts the authenticated user from an HTTP request.
+// Authenticator lets protected handlers share token validation without coupling them to auth storage.
 type Authenticator interface {
 	UserIDFromRequest(*http.Request) (uuid.UUID, error)
 }
@@ -30,12 +30,12 @@ const (
 	maxMonitorInterval  = 7 * 24 * 60 * 60
 )
 
-// NewController creates a monitoring controller.
+// NewController wires monitor HTTP handling to authentication and storage dependencies.
 func NewController(authenticator Authenticator, store Store) *Controller {
 	return &Controller{auth: authenticator, store: store}
 }
 
-// RegisterRoutes adds monitoring routes to a mux.
+// RegisterRoutes exposes only the monitor operations supported by this API version.
 func (controller *Controller) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/monitors", controller.list)
 	mux.HandleFunc("POST /api/v1/monitors", controller.create)

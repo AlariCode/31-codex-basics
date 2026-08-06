@@ -8,8 +8,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net/mail"
 	"net/http"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -21,20 +21,20 @@ import (
 )
 
 var (
-	// ErrInvalidRegistrationInput means registration data did not meet requirements.
+	// ErrInvalidRegistrationInput lets callers reject registration data without field-level leakage.
 	ErrInvalidRegistrationInput = errors.New("invalid registration input")
-	// ErrInvalidProfileInput means profile data did not meet requirements.
+	// ErrInvalidProfileInput identifies profile data that cannot be stored.
 	ErrInvalidProfileInput = errors.New("invalid profile input")
 )
 
-// RegistrationInput is data accepted when creating an account.
+// RegistrationInput groups account fields so registration validation has one explicit boundary.
 type RegistrationInput struct {
 	Email    string
 	Name     string
 	Password string
 }
 
-// TokenPair contains values issued by a successful authentication operation.
+// TokenPair carries access and refresh credentials together with the user context returned to the client.
 type TokenPair struct {
 	AccessToken  string
 	RefreshToken string
@@ -42,7 +42,7 @@ type TokenPair struct {
 	User         models.User
 }
 
-// Service coordinates authentication operations.
+// Service centralizes token, credential, and account rules while stores handle persistence.
 type Service struct {
 	users      UserStore
 	sessions   SessionStore
@@ -52,12 +52,12 @@ type Service struct {
 	now        func() time.Time
 }
 
-// NewService creates an authentication service.
+// NewService constructs a service with injectable stores and signing configuration.
 func NewService(users UserStore, sessions SessionStore, jwtSecret string, accessTTL, refreshTTL time.Duration) *Service {
 	return &Service{users: users, sessions: sessions, jwtSecret: []byte(jwtSecret), accessTTL: accessTTL, refreshTTL: refreshTTL, now: time.Now}
 }
 
-// Register creates a user and initial token pair.
+// Register validates and persists an account before issuing its first token pair.
 func (service *Service) Register(ctx context.Context, input RegistrationInput) (TokenPair, error) {
 	email, name, err := validateRegistration(input)
 	if err != nil {
@@ -74,7 +74,7 @@ func (service *Service) Register(ctx context.Context, input RegistrationInput) (
 	return service.issue(ctx, user)
 }
 
-// Login verifies credentials and issues a new token pair.
+// Login normalizes the lookup key and uses one public error for unknown users and bad passwords.
 func (service *Service) Login(ctx context.Context, email, password string) (TokenPair, error) {
 	user, err := service.users.FindByEmail(ctx, normalizeEmail(email))
 	if err != nil {
@@ -89,12 +89,12 @@ func (service *Service) Login(ctx context.Context, email, password string) (Toke
 	return service.issue(ctx, user)
 }
 
-// Profile returns the authenticated user's public profile.
+// Profile loads the user identified by a previously validated access token.
 func (service *Service) Profile(ctx context.Context, userID uuid.UUID) (models.User, error) {
 	return service.users.FindByID(ctx, userID)
 }
 
-// UserIDFromRequest validates an access token and returns its subject.
+// UserIDFromRequest accepts only access JWTs signed with the configured algorithm and secret.
 func (service *Service) UserIDFromRequest(request *http.Request) (uuid.UUID, error) {
 	const prefix = "Bearer "
 	header := request.Header.Get("Authorization")
@@ -122,7 +122,7 @@ func (service *Service) UserIDFromRequest(request *http.Request) (uuid.UUID, err
 	return userID, nil
 }
 
-// UpdateProfile updates the authenticated user's display name.
+// UpdateProfile trims and bounds the display name before delegating persistence.
 func (service *Service) UpdateProfile(ctx context.Context, userID uuid.UUID, name string) (models.User, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || len(name) > 100 {
@@ -131,12 +131,12 @@ func (service *Service) UpdateProfile(ctx context.Context, userID uuid.UUID, nam
 	return service.users.UpdateName(ctx, userID, name)
 }
 
-// UpdateAvatar changes the authenticated user's avatar filename.
+// UpdateAvatar delegates the already validated stored filename to persistence.
 func (service *Service) UpdateAvatar(ctx context.Context, userID uuid.UUID, avatarPath string) (models.User, error) {
 	return service.users.UpdateAvatar(ctx, userID, avatarPath)
 }
 
-// Refresh rotates a valid refresh token and issues a replacement token pair.
+// Refresh rotates the refresh session before issuing a replacement pair, making reuse detectable.
 func (service *Service) Refresh(ctx context.Context, refreshToken string) (TokenPair, error) {
 	if refreshToken == "" {
 		return TokenPair{}, ErrInvalidRefreshToken
@@ -154,7 +154,7 @@ func (service *Service) Refresh(ctx context.Context, refreshToken string) (Token
 	return service.issueWithRefresh(ctx, user, newToken, replacement)
 }
 
-// Logout revokes the session associated with the supplied refresh token.
+// Logout revokes the refresh session and treats an absent token as an already completed logout.
 func (service *Service) Logout(ctx context.Context, refreshToken string) error {
 	if refreshToken == "" {
 		return nil

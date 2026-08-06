@@ -1,4 +1,4 @@
-// Package config loads application configuration from environment variables.
+// Package config defines the runtime configuration boundary for the API.
 package config
 
 import (
@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Config contains all runtime settings for the API.
+// Config contains settings that must be shared consistently by the server components.
 type Config struct {
 	HTTPAddr        string
 	DatabaseURL     string
@@ -20,7 +20,7 @@ type Config struct {
 	AvatarDir       string
 }
 
-// Load reads configuration from environment variables.
+// Load reads environment variables, applies safe local defaults, and rejects missing secrets and database settings.
 func Load() (Config, error) {
 	config := Config{
 		HTTPAddr:        stringValue("HTTP_ADDR", ":8080"),

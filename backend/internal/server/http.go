@@ -1,9 +1,14 @@
-// Package server contains shared HTTP server infrastructure.
+// Package server contains HTTP infrastructure shared by the API entrypoints.
 package server
 
 import "net/http"
 
-// WithCORS adds credentialed CORS support for one configured browser origin.
+// WithCORS restricts credentialed browser access to the configured frontend origin.
+// The allow-list is intentionally limited to the methods and headers used by
+// the API: GET, POST, and PATCH for requests, OPTIONS for browser preflight,
+// and Content-Type and Authorization for JSON, uploads, and bearer tokens.
+// Credentials are enabled because the frontend sends the HttpOnly refresh
+// cookie, so the exact origin must be echoed instead of using the wildcard.
 func WithCORS(origin string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		requestOrigin := request.Header.Get("Origin")

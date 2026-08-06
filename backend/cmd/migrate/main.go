@@ -1,4 +1,4 @@
-// Command migrate applies versioned database migrations.
+// Command migrate applies pending versioned migrations before the API uses the database.
 package main
 
 import (

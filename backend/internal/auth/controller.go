@@ -25,14 +25,14 @@ const refreshCookieName = "refresh_token"
 const maxAvatarSize = 5 << 20
 const maxUploadSize = 20 << 20
 
-// HTTPConfig contains transport settings for the authentication controller.
+// HTTPConfig contains transport settings that affect cookie and upload behavior.
 type HTTPConfig struct {
 	RefreshTokenTTL time.Duration
 	CookieSecure    bool
 	AvatarDir       string
 }
 
-// Controller exposes authentication operations over HTTP.
+// Controller translates HTTP requests into authentication service calls and responses.
 type Controller struct {
 	service      *Service
 	refreshTTL   time.Duration
@@ -40,7 +40,7 @@ type Controller struct {
 	avatarDir    string
 }
 
-// NewController creates an authentication HTTP controller.
+// NewController applies upload defaults while keeping cookie behavior environment-specific.
 func NewController(service *Service, config HTTPConfig) *Controller {
 	avatarDir := config.AvatarDir
 	if avatarDir == "" {
@@ -49,7 +49,7 @@ func NewController(service *Service, config HTTPConfig) *Controller {
 	return &Controller{service: service, refreshTTL: config.RefreshTokenTTL, cookieSecure: config.CookieSecure, avatarDir: avatarDir}
 }
 
-// RegisterRoutes adds authentication routes to the provided mux.
+// RegisterRoutes exposes authentication and profile endpoints on the provided mux.
 func (controller *Controller) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/auth/register", controller.register)
 	mux.HandleFunc("POST /api/v1/auth/login", controller.login)

@@ -12,8 +12,17 @@ The repository has two independently runnable applications:
 Details in file: docs/rules/github-flow.md
 
 ## When commiting
+
 Use rules in file: docs/rules/commit.md
 
 ## When creating Pull Request
 
 Use rules in file: docs/rules/pr.md
+
+## Комментарии в коде
+
+- Комментируй ПОЧЕМУ, а не что, так как это видно из кода
+- Очевидное не комментируй, лучше используй правильные наименования
+- Пубуличнный функции doc comment
+- Сложную арифметику, поясняй радом
+- Меняешь код, актуализируй коммнетарий

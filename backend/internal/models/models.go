@@ -1,4 +1,4 @@
-// Package models contains database-backed application entities.
+// Package models contains the persistence shapes shared by services and repositories.
 package models
 
 import (
@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// User is an account that can authenticate with the service.
+// User stores the identity and password hash needed to authenticate an account.
 type User struct {
 	ID           uuid.UUID `gorm:"type:uuid;primaryKey"`
 	Email        string    `gorm:"uniqueIndex;not null"`
@@ -18,7 +18,7 @@ type User struct {
 	UpdatedAt    time.Time
 }
 
-// RefreshSession records a single rotatable browser session.
+// RefreshSession stores only a hash of the browser token and its revocation state.
 type RefreshSession struct {
 	ID        uuid.UUID  `gorm:"type:uuid;primaryKey"`
 	UserID    uuid.UUID  `gorm:"type:uuid;not null;index"`
@@ -30,7 +30,7 @@ type RefreshSession struct {
 	UpdatedAt time.Time
 }
 
-// Monitor is a URL check configuration owned by a user.
+// Monitor binds a URL check to its owner so monitor data remains user-scoped.
 type Monitor struct {
 	ID              uuid.UUID `gorm:"type:uuid;primaryKey"`
 	UserID          uuid.UUID `gorm:"type:uuid;not null;index"`
