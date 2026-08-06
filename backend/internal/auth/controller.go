@@ -59,7 +59,7 @@ func (controller *Controller) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/v1/profile", controller.updateProfile)
 	mux.HandleFunc("POST /api/v1/profile/avatar", controller.uploadAvatar)
 	mux.HandleFunc("POST /api/v1/upload", controller.uploadFile)
-	mux.HandleFunc("POST /api/v1/uploads", controller.uploadFile)
+	mux.HandleFunc("POST /api/v1/uploads", controller.uploadFiles)
 }
 
 type credentialsRequest struct {
@@ -93,6 +93,18 @@ type uploadResponse struct {
 	Size        int64  `json:"size"`
 }
 
+// register creates an account and issues access and refresh tokens.
+//
+// @Summary Register a user
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param body body credentialsRequest true "Registration credentials"
+// @Success 201 {object} tokenResponse
+// @Failure 400 {object} map[string]string
+// @Failure 409 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/auth/register [post]
 func (controller *Controller) register(writer http.ResponseWriter, request *http.Request) {
 	var body credentialsRequest
 	if !decodeJSON(writer, request, &body) {
@@ -106,6 +118,18 @@ func (controller *Controller) register(writer http.ResponseWriter, request *http
 	controller.writeTokens(writer, http.StatusCreated, pair)
 }
 
+// login authenticates a user and issues access and refresh tokens.
+//
+// @Summary Log in
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param body body credentialsRequest true "Login credentials"
+// @Success 200 {object} tokenResponse
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/auth/login [post]
 func (controller *Controller) login(writer http.ResponseWriter, request *http.Request) {
 	var body credentialsRequest
 	if !decodeJSON(writer, request, &body) {
@@ -119,6 +143,16 @@ func (controller *Controller) login(writer http.ResponseWriter, request *http.Re
 	controller.writeTokens(writer, http.StatusOK, pair)
 }
 
+// refresh rotates the refresh-token cookie and returns a new access token pair.
+//
+// @Summary Refresh access tokens
+// @Tags auth
+// @Produce json
+// @Description Requires the HttpOnly `refresh_token` cookie.
+// @Success 200 {object} tokenResponse
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/auth/refresh [post]
 func (controller *Controller) refresh(writer http.ResponseWriter, request *http.Request) {
 	cookie, err := request.Cookie(refreshCookieName)
 	if err != nil {
@@ -135,6 +169,14 @@ func (controller *Controller) refresh(writer http.ResponseWriter, request *http.
 	controller.writeTokens(writer, http.StatusOK, pair)
 }
 
+// logout revokes the refresh session and clears the refresh-token cookie.
+//
+// @Summary Log out
+// @Tags auth
+// @Description Revokes the session from the HttpOnly `refresh_token` cookie when it is present.
+// @Success 204
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/auth/logout [post]
 func (controller *Controller) logout(writer http.ResponseWriter, request *http.Request) {
 	cookie, err := request.Cookie(refreshCookieName)
 	if err == nil {
@@ -147,6 +189,15 @@ func (controller *Controller) logout(writer http.ResponseWriter, request *http.R
 	writer.WriteHeader(http.StatusNoContent)
 }
 
+// profile returns the authenticated user's profile.
+//
+// @Summary Get profile
+// @Tags profile
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} userResponse
+// @Failure 401 {object} map[string]string
+// @Router /api/v1/profile [get]
 func (controller *Controller) profile(writer http.ResponseWriter, request *http.Request) {
 	userID, ok := controller.userID(writer, request)
 	if !ok {
@@ -160,6 +211,18 @@ func (controller *Controller) profile(writer http.ResponseWriter, request *http.
 	writeJSON(writer, http.StatusOK, responseUser(user))
 }
 
+// updateProfile changes the authenticated user's display name.
+//
+// @Summary Update profile
+// @Tags profile
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body profileRequest true "Profile changes"
+// @Success 200 {object} userResponse
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Router /api/v1/profile [patch]
 func (controller *Controller) updateProfile(writer http.ResponseWriter, request *http.Request) {
 	userID, ok := controller.userID(writer, request)
 	if !ok {
@@ -181,6 +244,20 @@ func (controller *Controller) updateProfile(writer http.ResponseWriter, request 
 	writeJSON(writer, http.StatusOK, responseUser(user))
 }
 
+// uploadAvatar validates and stores a JPEG or PNG avatar for the authenticated user.
+//
+// @Summary Upload avatar
+// @Tags profile
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param avatar formData file true "JPEG or PNG avatar, up to 5 MiB"
+// @Success 200 {object} userResponse
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 413 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/profile/avatar [post]
 func (controller *Controller) uploadAvatar(writer http.ResponseWriter, request *http.Request) {
 	userID, ok := controller.userID(writer, request)
 	if !ok {
@@ -243,6 +320,20 @@ func (controller *Controller) uploadAvatar(writer http.ResponseWriter, request *
 	writeJSON(writer, http.StatusOK, responseUser(user))
 }
 
+// uploadFile stores a file for the authenticated user and returns its public URL.
+//
+// @Summary Upload a file
+// @Tags profile
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param file formData file true "File, up to 20 MiB"
+// @Success 201 {object} uploadResponse
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 413 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/upload [post]
 func (controller *Controller) uploadFile(writer http.ResponseWriter, request *http.Request) {
 	if _, ok := controller.userID(writer, request); !ok {
 		return
@@ -279,6 +370,24 @@ func (controller *Controller) uploadFile(writer http.ResponseWriter, request *ht
 		return
 	}
 	writeJSON(writer, http.StatusCreated, uploadResponse{URL: "/uploads/files/" + filename, Filename: filename, ContentType: contentType, Size: header.Size})
+}
+
+// uploadFiles documents and serves the plural alias of the file upload endpoint.
+//
+// @Summary Upload a file (plural alias)
+// @Tags profile
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param file formData file true "File, up to 20 MiB"
+// @Success 201 {object} uploadResponse
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 413 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/uploads [post]
+func (controller *Controller) uploadFiles(writer http.ResponseWriter, request *http.Request) {
+	controller.uploadFile(writer, request)
 }
 
 var errUploadTooLarge = errors.New("uploaded file is too large")

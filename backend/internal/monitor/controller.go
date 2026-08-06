@@ -52,6 +52,19 @@ type response struct {
 	IntervalSeconds int    `json:"interval_seconds"`
 }
 
+// create registers a URL monitor for the authenticated user.
+//
+// @Summary Create a monitor
+// @Tags monitors
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body createRequest true "Monitor configuration"
+// @Success 201 {object} response
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/monitors [post]
 func (controller *Controller) create(writer http.ResponseWriter, request *http.Request) {
 	userID, ok := controller.userID(writer, request)
 	if !ok {
@@ -78,6 +91,16 @@ func (controller *Controller) create(writer http.ResponseWriter, request *http.R
 	writeJSON(writer, http.StatusCreated, monitorResponse(value))
 }
 
+// list returns all monitors owned by the authenticated user.
+//
+// @Summary List monitors
+// @Tags monitors
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} response
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/monitors [get]
 func (controller *Controller) list(writer http.ResponseWriter, request *http.Request) {
 	userID, ok := controller.userID(writer, request)
 	if !ok {

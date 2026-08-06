@@ -28,6 +28,16 @@ go run ./cmd/server
 
 The service listens on `:8080` by default. Run `go test ./...` and `go build ./...` before submitting changes. To run PostgreSQL repository integration tests after migrations, set `TEST_DATABASE_URL` to the same local connection string.
 
+## API documentation
+
+Regenerate the Swagger contract and Redoc HTML from the backend directory:
+
+```bash
+go generate ./cmd/server
+```
+
+The generated files are `docs/swagger.json`, `docs/swagger.yaml`, and `docs/swagger.html`.
+
 ## Configuration
 
 | Variable | Required | Default | Description |

@@ -16,7 +16,23 @@ import (
 	"uptime-backend/internal/database"
 	"uptime-backend/internal/monitor"
 	"uptime-backend/internal/server"
+
+	_ "uptime-backend/docs"
 )
+
+// @title Uptime API
+// @version 1.0
+// @description API for user authentication, profiles, file uploads, and URL monitors.
+// @host localhost:8080
+// @BasePath /
+// @schemes http https
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Enter "Bearer <access_token>".
+//
+//go:generate go run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g cmd/server/main.go -d ../.. -o ../../docs --parseInternal
+//go:generate npx --yes redoc-cli@0.13.21 bundle ../../docs/swagger.yaml -o ../../docs/swagger.html
 
 func main() {
 	cfg, err := config.Load()

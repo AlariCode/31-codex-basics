@@ -22,6 +22,10 @@ Use idiomatic Go and format all changed Go files with `gofmt`. Keep package name
 
 Place tests beside the code they cover in `*_test.go` files. Name tests descriptively, for example `TestLoadConfig_ReturnsDefaults`. Cover new behavior and failure cases, then run `go test ./...` before submitting.
 
+## API Documentation
+
+When adding or changing an HTTP route, update its swaggo annotations with the request parameters, security requirements, and response status codes. Regenerate the OpenAPI contract and Redoc HTML with `go generate ./cmd/server` from `backend/`, and include the updated files in `docs/` in the same change.
+
 ## Review Notes
 
 Describe API, configuration, or operational changes in the pull request. When changing a contract consumed by the frontend, identify the affected route, payload, status code, or environment variable.
