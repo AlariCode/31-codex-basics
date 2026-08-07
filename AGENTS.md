@@ -11,10 +11,6 @@ The repository has two independently runnable applications:
 
 Details in file: docs/rules/github-flow.md
 
-## When commiting
-
-Use rules in file: docs/rules/commit.md
-
 ## When creating Pull Request
 
 Use rules in file: docs/rules/pr.md
