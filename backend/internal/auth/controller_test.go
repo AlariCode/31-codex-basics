@@ -34,6 +34,18 @@ func TestControllerRegister_SetsRefreshCookieAndReturnsAccessToken(t *testing.T)
 	}
 }
 
+func TestControllerRegister_RejectsOversizedJSONBody(t *testing.T) {
+	body := `{"email":"person@example.com","name":"Person","password":"` + strings.Repeat("a", maxJSONBodySize) + `"}`
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	newTestControllerHandler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
 func TestControllerRefresh_WithoutCookieClearsCookie(t *testing.T) {
 	response := httptest.NewRecorder()
 	newTestControllerHandler().ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil))

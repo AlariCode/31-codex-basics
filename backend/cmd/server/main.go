@@ -54,7 +54,7 @@ func main() {
 	controller.RegisterRoutes(routes)
 	monitor.NewController(service, monitor.NewGormStore(db)).RegisterRoutes(routes)
 	routes.Handle("GET /uploads/avatars/", http.StripPrefix("/uploads/avatars/", http.FileServer(http.Dir(cfg.AvatarDir))))
-	routes.Handle("GET /uploads/files/", http.StripPrefix("/uploads/files/", http.FileServer(http.Dir(filepath.Join(cfg.AvatarDir, "..", "files")))))
+	routes.Handle("GET /uploads/files/", server.DownloadHandler("/uploads/files/", filepath.Join(cfg.AvatarDir, "..", "files")))
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: server.WithCORS(cfg.CORSOrigin, routes), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		log.Printf("listening on %s", cfg.HTTPAddr)

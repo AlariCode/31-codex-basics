@@ -22,6 +22,7 @@ import (
 
 const refreshCookieName = "refresh_token"
 
+const maxJSONBodySize = 64 << 10
 const maxAvatarSize = 5 << 20
 const maxUploadSize = 20 << 20
 
@@ -486,6 +487,7 @@ func (controller *Controller) writeAuthError(writer http.ResponseWriter, err err
 }
 
 func decodeJSON(writer http.ResponseWriter, request *http.Request, target any) bool {
+	request.Body = http.MaxBytesReader(writer, request.Body, maxJSONBodySize)
 	decoder := json.NewDecoder(request.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {

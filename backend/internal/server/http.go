@@ -30,3 +30,14 @@ func WithCORS(origin string, next http.Handler) http.Handler {
 		next.ServeHTTP(writer, request)
 	})
 }
+
+// DownloadHandler serves user-provided files as inert downloads instead of executable web content.
+func DownloadHandler(prefix, directory string) http.Handler {
+	fileServer := http.StripPrefix(prefix, http.FileServer(http.Dir(directory)))
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Disposition", "attachment")
+		writer.Header().Set("Content-Type", "application/octet-stream")
+		writer.Header().Set("X-Content-Type-Options", "nosniff")
+		fileServer.ServeHTTP(writer, request)
+	})
+}
