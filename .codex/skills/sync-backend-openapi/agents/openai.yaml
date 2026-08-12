@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sync Backend OpenAPI"
+  short_description: "Keep backend routes and OpenAPI docs in sync"
+  default_prompt: "Use $sync-backend-openapi to update Swaggo annotations and regenerate the backend OpenAPI contract after an API route change."
