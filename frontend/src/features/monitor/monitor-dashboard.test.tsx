@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -40,6 +41,20 @@ describe("MonitorDashboard", () => {
 
     await waitFor(() => expect(screen.getByText("https://example.com")).toBeInTheDocument());
     expect(createMonitor).toHaveBeenCalledWith(expect.any(Function), { url: "https://example.com", interval_seconds: 5 });
+  });
+
+  it("displays a created monitor in React Strict Mode", async () => {
+    vi.mocked(listMonitors).mockResolvedValue([]);
+    vi.mocked(createMonitor).mockResolvedValue({ id: "1", url: "https://example.com", interval_seconds: 5 });
+
+    render(<StrictMode><MonitorDashboard /></StrictMode>);
+    await waitFor(() => expect(screen.getByText("Пока нет сайтов. Добавьте первый сайт для мониторинга.")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Добавить сайт" }));
+    fireEvent.change(screen.getByLabelText("URL сайта"), { target: { value: "https://example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Создать" }));
+
+    await waitFor(() => expect(screen.getByText("https://example.com")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Создать" })).not.toBeInTheDocument();
   });
 
   it("edits a monitor using the prefilled form", async () => {

@@ -35,10 +35,13 @@ export function MonitorDashboard() {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const isMounted = useRef(true);
+  const isMounted = useRef(false);
 
-  useEffect(() => () => {
-    isMounted.current = false;
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
 
   useEffect(() => {
