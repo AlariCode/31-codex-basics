@@ -53,6 +53,32 @@ func (store *fakeStore) List(_ context.Context, userID uuid.UUID) ([]models.Moni
 	return result, nil
 }
 
+func (store *fakeStore) Update(_ context.Context, userID uuid.UUID, value models.Monitor) error {
+	if store.err != nil {
+		return store.err
+	}
+	for index := range store.listed {
+		if store.listed[index].ID == value.ID && store.listed[index].UserID == userID {
+			store.listed[index] = value
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
+func (store *fakeStore) Delete(_ context.Context, userID, monitorID uuid.UUID) error {
+	if store.err != nil {
+		return store.err
+	}
+	for index := range store.listed {
+		if store.listed[index].ID == monitorID && store.listed[index].UserID == userID {
+			store.listed = append(store.listed[:index], store.listed[index+1:]...)
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
 func TestValidURL_AcceptsHTTPAndHTTPS(t *testing.T) {
 	for _, value := range []string{"https://example.com", "http://localhost:8080/health"} {
 		if !validURL(value) {
@@ -133,5 +159,83 @@ func TestControllerList_ReturnsOnlyAuthenticatedOwner(t *testing.T) {
 	var body []response
 	if recorder.Code != http.StatusOK || json.NewDecoder(recorder.Body).Decode(&body) != nil || len(body) != 1 || body[0].URL != "https://one.example" {
 		t.Fatalf("status=%d body=%s decoded=%#v", recorder.Code, recorder.Body.String(), body)
+	}
+}
+
+func TestControllerUpdate_UpdatesAuthenticatedOwner(t *testing.T) {
+	userID := uuid.New()
+	monitorID := uuid.New()
+	store := &fakeStore{listed: []models.Monitor{{ID: monitorID, UserID: userID, URL: "https://old.example", IntervalSeconds: 60}}}
+	routes := http.NewServeMux()
+	NewController(fakeAuthenticator{userID: userID}, store).RegisterRoutes(routes)
+	request := httptest.NewRequest(http.MethodPatch, "/api/v1/monitors/"+monitorID.String(), strings.NewReader(`{"url":" https://new.example ","interval_seconds":120}`))
+	recorder := httptest.NewRecorder()
+	routes.ServeHTTP(recorder, request)
+
+	var body response
+	if recorder.Code != http.StatusOK || json.NewDecoder(recorder.Body).Decode(&body) != nil || body.URL != "https://new.example" || body.IntervalSeconds != 120 {
+		t.Fatalf("status=%d body=%s decoded=%#v", recorder.Code, recorder.Body.String(), body)
+	}
+}
+
+func TestControllerDelete_DeletesAuthenticatedOwner(t *testing.T) {
+	userID := uuid.New()
+	monitorID := uuid.New()
+	store := &fakeStore{listed: []models.Monitor{{ID: monitorID, UserID: userID}}}
+	routes := http.NewServeMux()
+	NewController(fakeAuthenticator{userID: userID}, store).RegisterRoutes(routes)
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/monitors/"+monitorID.String(), nil)
+	response := httptest.NewRecorder()
+	routes.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent || len(store.listed) != 0 {
+		t.Fatalf("status=%d body=%s listed=%#v", response.Code, response.Body.String(), store.listed)
+	}
+}
+
+func TestControllerUpdateAndDelete_ReturnNotFoundForOtherOwner(t *testing.T) {
+	ownerID := uuid.New()
+	monitorID := uuid.New()
+	store := &fakeStore{listed: []models.Monitor{{ID: monitorID, UserID: ownerID}}}
+	routes := http.NewServeMux()
+	NewController(fakeAuthenticator{userID: uuid.New()}, store).RegisterRoutes(routes)
+
+	for _, method := range []string{http.MethodPatch, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			var body *strings.Reader
+			if method == http.MethodPatch {
+				body = strings.NewReader(`{"url":"https://new.example","interval_seconds":120}`)
+			} else {
+				body = strings.NewReader("")
+			}
+			request := httptest.NewRequest(method, "/api/v1/monitors/"+monitorID.String(), body)
+			response := httptest.NewRecorder()
+			routes.ServeHTTP(response, request)
+			if response.Code != http.StatusNotFound {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestControllerUpdateAndDelete_RejectInvalidMonitorID(t *testing.T) {
+	routes := http.NewServeMux()
+	NewController(fakeAuthenticator{userID: uuid.New()}, &fakeStore{}).RegisterRoutes(routes)
+
+	for _, method := range []string{http.MethodPatch, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			var body *strings.Reader
+			if method == http.MethodPatch {
+				body = strings.NewReader(`{"url":"https://example.com","interval_seconds":60}`)
+			} else {
+				body = strings.NewReader("")
+			}
+			request := httptest.NewRequest(method, "/api/v1/monitors/not-a-uuid", body)
+			response := httptest.NewRecorder()
+			routes.ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
 	}
 }

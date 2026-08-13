@@ -5,7 +5,7 @@ import "net/http"
 
 // WithCORS restricts credentialed browser access to the configured frontend origin.
 // The allow-list is intentionally limited to the methods and headers used by
-// the API: GET, POST, and PATCH for requests, OPTIONS for browser preflight,
+// the API: DELETE, GET, POST, and PATCH for requests, OPTIONS for browser preflight,
 // and Content-Type and Authorization for JSON, uploads, and bearer tokens.
 // Credentials are enabled because the frontend sends the HttpOnly refresh
 // cookie, so the exact origin must be echoed instead of using the wildcard.
@@ -16,7 +16,7 @@ func WithCORS(origin string, next http.Handler) http.Handler {
 			writer.Header().Set("Access-Control-Allow-Origin", requestOrigin)
 			writer.Header().Set("Access-Control-Allow-Credentials", "true")
 			writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			writer.Header().Set("Access-Control-Allow-Methods", "GET, PATCH, POST, OPTIONS")
+			writer.Header().Set("Access-Control-Allow-Methods", "DELETE, GET, PATCH, POST, OPTIONS")
 			writer.Header().Set("Vary", "Origin")
 		}
 		if request.Method == http.MethodOptions {

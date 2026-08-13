@@ -12,11 +12,14 @@ import (
 )
 
 var ErrInvalidInput = errors.New("invalid monitor input")
+var ErrNotFound = errors.New("monitor not found")
 
 // Store isolates monitor use cases from the database implementation.
 type Store interface {
 	Create(context.Context, models.Monitor) error
 	List(context.Context, uuid.UUID) ([]models.Monitor, error)
+	Update(context.Context, uuid.UUID, models.Monitor) error
+	Delete(context.Context, uuid.UUID, uuid.UUID) error
 }
 
 // GormStore adapts GORM persistence to Store.
@@ -35,4 +38,33 @@ func (store *GormStore) List(ctx context.Context, userID uuid.UUID) ([]models.Mo
 	var monitors []models.Monitor
 	err := store.db.WithContext(ctx).Where("user_id = ?", userID).Order("created_at ASC").Find(&monitors).Error
 	return monitors, err
+}
+
+// Update changes only the editable fields of a monitor owned by the user.
+func (store *GormStore) Update(ctx context.Context, userID uuid.UUID, value models.Monitor) error {
+	result := store.db.WithContext(ctx).
+		Model(&models.Monitor{}).
+		Where("id = ? AND user_id = ?", value.ID, userID).
+		Updates(map[string]any{"url": value.URL, "interval_seconds": value.IntervalSeconds})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Delete removes a monitor only when it belongs to the authenticated user.
+func (store *GormStore) Delete(ctx context.Context, userID, monitorID uuid.UUID) error {
+	result := store.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", monitorID, userID).
+		Delete(&models.Monitor{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
