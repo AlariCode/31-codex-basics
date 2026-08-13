@@ -12,7 +12,7 @@ func TestWithCORS_AllowsConfiguredOrigin(t *testing.T) {
 	request.Header.Set("Origin", "http://localhost:3000")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || response.Header().Get("Access-Control-Allow-Credentials") != "true" {
+	if response.Code != http.StatusOK || response.Header().Get("Access-Control-Allow-Credentials") != "true" || response.Header().Get("Access-Control-Allow-Methods") != "DELETE, GET, PATCH, POST, OPTIONS" {
 		t.Fatalf("unexpected CORS response: status=%d headers=%v", response.Code, response.Header())
 	}
 }

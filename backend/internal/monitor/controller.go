@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -39,12 +40,16 @@ func NewController(authenticator Authenticator, store Store) *Controller {
 func (controller *Controller) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/monitors", controller.list)
 	mux.HandleFunc("POST /api/v1/monitors", controller.create)
+	mux.HandleFunc("PATCH /api/v1/monitors/{id}", controller.update)
+	mux.HandleFunc("DELETE /api/v1/monitors/{id}", controller.delete)
 }
 
 type createRequest struct {
 	URL             string `json:"url"`
 	IntervalSeconds int    `json:"interval_seconds"`
 }
+
+type updateRequest = createRequest
 
 type response struct {
 	ID              string `json:"id"`
@@ -116,6 +121,97 @@ func (controller *Controller) list(writer http.ResponseWriter, request *http.Req
 		result = append(result, monitorResponse(value))
 	}
 	writeJSON(writer, http.StatusOK, result)
+}
+
+// update changes a monitor owned by the authenticated user.
+//
+// @Summary Update a monitor
+// @Tags monitors
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Monitor ID"
+// @Param body body updateRequest true "Monitor configuration"
+// @Success 200 {object} response
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/monitors/{id} [patch]
+func (controller *Controller) update(writer http.ResponseWriter, request *http.Request) {
+	userID, ok := controller.userID(writer, request)
+	if !ok {
+		return
+	}
+	monitorID, err := uuid.Parse(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid monitor id")
+		return
+	}
+	body, ok := decodeUpdateRequest(writer, request)
+	if !ok {
+		return
+	}
+	value := models.Monitor{ID: monitorID, UserID: userID, URL: strings.TrimSpace(body.URL), IntervalSeconds: body.IntervalSeconds}
+	if err := controller.store.Update(request.Context(), userID, value); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			writeError(writer, http.StatusNotFound, "monitor not found")
+			return
+		}
+		writeError(writer, http.StatusInternalServerError, "internal server error")
+		return
+	}
+	writeJSON(writer, http.StatusOK, monitorResponse(value))
+}
+
+// delete removes a monitor owned by the authenticated user.
+//
+// @Summary Delete a monitor
+// @Tags monitors
+// @Security BearerAuth
+// @Param id path string true "Monitor ID"
+// @Success 204
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/monitors/{id} [delete]
+func (controller *Controller) delete(writer http.ResponseWriter, request *http.Request) {
+	userID, ok := controller.userID(writer, request)
+	if !ok {
+		return
+	}
+	monitorID, err := uuid.Parse(request.PathValue("id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid monitor id")
+		return
+	}
+	if err := controller.store.Delete(request.Context(), userID, monitorID); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			writeError(writer, http.StatusNotFound, "monitor not found")
+			return
+		}
+		writeError(writer, http.StatusInternalServerError, "internal server error")
+		return
+	}
+	writer.WriteHeader(http.StatusNoContent)
+}
+
+func decodeUpdateRequest(writer http.ResponseWriter, request *http.Request) (updateRequest, bool) {
+	request.Body = http.MaxBytesReader(writer, request.Body, maxMonitorBodySize)
+	var body updateRequest
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil || !validMonitorInput(body) {
+		writeError(writer, http.StatusBadRequest, "invalid monitor input")
+		return updateRequest{}, false
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		writeError(writer, http.StatusBadRequest, "invalid monitor input")
+		return updateRequest{}, false
+	}
+	return body, true
 }
 
 func (controller *Controller) userID(writer http.ResponseWriter, request *http.Request) (uuid.UUID, bool) {
