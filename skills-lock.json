@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "golang-code-style": {
+      "source": "samber/cc-skills-golang",
+      "sourceType": "github",
+      "skillPath": "skills/golang-code-style/SKILL.md",
+      "computedHash": "1c949d9721fac34faf39e640a08c9f17b6449a64183824ac99d2e3785b1fef57"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-best-practices/SKILL.md",
+      "computedHash": "ca7b0c0c6e5f2750043f7f0cd72d16ac4e2abc48f9b5500d047a4b77a2506212"
+    }
+  }
+}
