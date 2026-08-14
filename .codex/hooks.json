@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "(?:functions\\.)?(?:apply_patch|exec)|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel)\"/.codex/hooks/prevent-committed-migration-edits.sh",
+            "timeout": 5,
+            "statusMessage": "Checking migration immutability"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "(?:functions\\.)?apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".codex/hooks/gofmt.sh"
+          },
+          {
+            "type": "command",
+            "command": ".codex/hooks/frontend-eslint.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "osascript -e 'display notification \"Задача завершена\" with title \"Codex\"'"
+          }
+        ]
+      }
+    ]
+  }
+}
