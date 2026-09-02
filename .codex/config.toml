@@ -1,0 +1,5 @@
+[mcp_servers.postgres-uptime]
+command = "uvx"
+args = ["--with", "mcp<2", "postgres-mcp", "--access-mode=restricted"]
+env_vars = ["DATABASE_URI"]
+startup_timeout_ms = 30000
