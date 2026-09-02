@@ -14,6 +14,18 @@ go test ./...    # run the Go test suite
 gofmt -w <files> # format changed Go source files
 ```
 
+## Development Data
+
+Use the `mcp__postgres_uptime__execute_sql` MCP tool to inspect development data in the `uptime` PostgreSQL database. The tool accepts read-only SQL, so use `SELECT` queries only and limit results to the columns and rows needed for the task.
+
+For example, to count registered users:
+
+```sql
+SELECT COUNT(*) AS user_count FROM public.users;
+```
+
+Do not expose user-level personal data, session tokens, password hashes, or database credentials in chat, logs, or committed files.
+
 ## Style and Naming
 
 Use idiomatic Go and format all changed Go files with `gofmt`. Keep package names short and lowercase. Use PascalCase for exported identifiers and add Go doc comments to each exported type, function, and variable. Organize executables as `cmd/<service>` and application-only packages as `internal/<package>`.
