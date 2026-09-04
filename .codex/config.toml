@@ -3,3 +3,7 @@ command = "uvx"
 args = ["--with", "mcp<2", "postgres-mcp", "--access-mode=restricted"]
 env_vars = ["DATABASE_URI"]
 startup_timeout_ms = 30000
+
+[mcp_servers.playwright]
+command = "npx"
+args = ["@playwright/mcp@latest"]

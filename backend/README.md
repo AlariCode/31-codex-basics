@@ -50,6 +50,7 @@ The generated files are `docs/swagger.json`, `docs/swagger.yaml`, and `docs/swag
 | `CORS_ORIGIN` | No | `http://localhost:3005` | Allowed browser origin. |
 | `COOKIE_SECURE` | No | `false` | Set to `true` behind HTTPS in production. |
 | `AVATAR_DIR` | No | `uploads/avatars` | Local directory used to store uploaded files; avatars and generic files use subdirectories. |
+| `FAVICON_DIR` | No | `uploads/favicons` | Local directory used to cache downloaded PNG favicons for monitored sites. |
 | `POSTGRES_PORT` | No | `5436` | Host port mapped by `docker compose` to the bundled PostgreSQL container. |
 
 ## Authentication API

@@ -9,10 +9,10 @@ describe("monitor API", () => {
 
   it("creates a monitor through the shared authenticated Axios client", async () => {
     const requestMock = vi.spyOn(apiClient, "request").mockResolvedValue({
-      data: { id: "1", url: "https://example.com", interval_seconds: 420 },
+      data: { id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 420 },
     } as never);
 
-    await expect(createMonitor(async () => "token", { url: "https://example.com", interval_seconds: 420 })).resolves.toEqual({ id: "1", url: "https://example.com", interval_seconds: 420 });
+    await expect(createMonitor(async () => "token", { url: "https://example.com", interval_seconds: 420 })).resolves.toEqual({ id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 420 });
     expect(requestMock).toHaveBeenCalledWith(expect.objectContaining({ method: "POST", url: "/api/v1/monitors", data: { url: "https://example.com", interval_seconds: 420 } }));
   });
 
@@ -29,10 +29,10 @@ describe("monitor API", () => {
 
   it("updates a monitor through the authenticated PATCH endpoint", async () => {
     const requestMock = vi.spyOn(apiClient, "request").mockResolvedValue({
-      data: { id: "1", url: "https://updated.example", interval_seconds: 600 },
+      data: { id: "1", url: "https://updated.example", favicon_url: "", interval_seconds: 600 },
     } as never);
 
-    await expect(updateMonitor(async () => "token", "1", { url: "https://updated.example", interval_seconds: 600 })).resolves.toEqual({ id: "1", url: "https://updated.example", interval_seconds: 600 });
+    await expect(updateMonitor(async () => "token", "1", { url: "https://updated.example", interval_seconds: 600 })).resolves.toEqual({ id: "1", url: "https://updated.example", favicon_url: "", interval_seconds: 600 });
     expect(requestMock).toHaveBeenCalledWith(expect.objectContaining({ method: "PATCH", url: "/api/v1/monitors/1" }));
   });
 

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import { isRequestCanceled } from "@/features/api-client";
-import { createMonitor, deleteMonitor, listMonitors, updateMonitor, type Monitor } from "@/features/monitor/api";
+import { createMonitor, deleteMonitor, faviconURL, listMonitors, updateMonitor, type Monitor } from "@/features/monitor/api";
 import { useAuth } from "@/features/auth/auth-provider";
 
 const units = { seconds: 1, minutes: 60, hours: 3600 } as const;
@@ -20,6 +20,31 @@ function intervalFormValue(seconds: number): { amount: string; unit: Unit } {
   if (seconds % units.hours === 0) return { amount: String(seconds / units.hours), unit: "hours" };
   if (seconds % units.minutes === 0) return { amount: String(seconds / units.minutes), unit: "minutes" };
   return { amount: String(seconds), unit: "seconds" };
+}
+
+function DefaultSiteIcon() {
+  return (
+    <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700" data-testid="default-site-icon" aria-hidden="true">
+      <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" focusable="false">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+      </svg>
+    </span>
+  );
+}
+
+function MonitorIcon({ source, url }: Readonly<{ source: string; url: string }>) {
+  const [failedSource, setFailedSource] = useState<string | null>(null);
+  const faviconSource = faviconURL(source);
+  const imageSource = faviconSource ? `${faviconSource}?site=${encodeURIComponent(url)}` : null;
+
+  if (!imageSource || failedSource === imageSource) {
+    return <DefaultSiteIcon />;
+  }
+
+  // The API image URL is resolved at runtime; a native image lets this card switch to its fallback on a failed request.
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img className="size-10 shrink-0 rounded-lg border border-zinc-200 bg-white object-contain p-1" data-testid="monitor-favicon" src={imageSource} alt="" onError={() => setFailedSource(imageSource)} />;
 }
 
 export function MonitorDashboard() {
@@ -146,7 +171,7 @@ export function MonitorDashboard() {
       </form> : null}
 
       {error && !isFormOpen && !deletingMonitor ? <p className="mt-6 text-sm text-red-700" role="alert">{error}</p> : null}
-      <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{monitors.map((monitor) => <article className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm" key={monitor.id}><p className="truncate font-medium" title={monitor.url}>{monitor.url}</p><p className="mt-3 text-sm text-zinc-500">{formatInterval(monitor.interval_seconds)}</p><div className="mt-5 flex gap-2"><button className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-50" type="button" onClick={() => openEditForm(monitor)}>Редактировать</button><button className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50" type="button" onClick={() => { setError(""); setDeletingMonitor(monitor); }}>Удалить</button></div></article>)}</section>
+      <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{monitors.map((monitor) => <article className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm" key={monitor.id}><div className="flex items-start gap-3"><MonitorIcon source={monitor.favicon_url} url={monitor.url} /><p className="min-w-0 truncate pt-2 font-medium" title={monitor.url}>{monitor.url}</p></div><p className="mt-3 text-sm text-zinc-500">{formatInterval(monitor.interval_seconds)}</p><div className="mt-5 flex gap-2"><button className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-50" type="button" onClick={() => openEditForm(monitor)}>Редактировать</button><button className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50" type="button" onClick={() => { setError(""); setDeletingMonitor(monitor); }}>Удалить</button></div></article>)}</section>
       {isLoading ? <p className="mt-12 text-center text-sm text-zinc-500">Загружаем сайты…</p> : null}
       {!isLoading && monitors.length === 0 && !isFormOpen ? <p className="mt-12 text-center text-sm text-zinc-500">Пока нет сайтов. Добавьте первый сайт для мониторинга.</p> : null}
       {deletingMonitor ? <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 px-6" role="presentation"><div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="delete-monitor-title"><h2 className="text-lg font-semibold" id="delete-monitor-title">Удалить сайт?</h2><p className="mt-3 text-sm text-zinc-600">Сайт <span className="font-medium text-zinc-900">{deletingMonitor.url}</span> будет удалён без возможности восстановления.</p>{error ? <p className="mt-4 text-sm text-red-700" role="alert">{error}</p> : null}<div className="mt-6 flex justify-end gap-3"><button className="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-medium" type="button" disabled={isDeleting} onClick={() => setDeletingMonitor(null)}>Отмена</button><button className="rounded-lg bg-red-700 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60" type="button" disabled={isDeleting} onClick={() => void handleDelete()}>{isDeleting ? "Удаляем…" : "Удалить"}</button></div></div></div> : null}

@@ -66,6 +66,25 @@ func (store *fakeStore) Update(_ context.Context, userID uuid.UUID, value models
 	return ErrNotFound
 }
 
+func (store *fakeStore) UpdateFavicon(_ context.Context, userID, monitorID uuid.UUID, faviconPath string) error {
+	if store.err != nil {
+		return store.err
+	}
+	for index := range store.listed {
+		if store.listed[index].ID == monitorID && store.listed[index].UserID == userID {
+			store.listed[index].FaviconPath = faviconPath
+			return nil
+		}
+	}
+	for index := range store.created {
+		if store.created[index].ID == monitorID && store.created[index].UserID == userID {
+			store.created[index].FaviconPath = faviconPath
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
 func (store *fakeStore) Delete(_ context.Context, userID, monitorID uuid.UUID) error {
 	if store.err != nil {
 		return store.err
@@ -237,5 +256,55 @@ func TestControllerUpdateAndDelete_RejectInvalidMonitorID(t *testing.T) {
 				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 			}
 		})
+	}
+}
+
+type fakeFaviconResolver struct {
+	path  string
+	err   error
+	calls []string
+}
+
+func (resolver *fakeFaviconResolver) Fetch(_ context.Context, siteURL string, _ uuid.UUID) (string, error) {
+	resolver.calls = append(resolver.calls, siteURL)
+	return resolver.path, resolver.err
+}
+
+func TestControllerCreate_StoresAndReturnsFetchedFavicon(t *testing.T) {
+	userID := uuid.New()
+	store := &fakeStore{}
+	resolver := &fakeFaviconResolver{path: "/uploads/favicons/site.png"}
+	routes := http.NewServeMux()
+	NewController(fakeAuthenticator{userID: userID}, store, resolver).RegisterRoutes(routes)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/monitors", strings.NewReader(`{"url":"https://example.com","interval_seconds":60}`))
+	recorder := httptest.NewRecorder()
+	routes.ServeHTTP(recorder, request)
+
+	var body response
+	if recorder.Code != http.StatusCreated || json.NewDecoder(recorder.Body).Decode(&body) != nil || body.FaviconURL != resolver.path {
+		t.Fatalf("status=%d body=%s decoded=%#v", recorder.Code, recorder.Body.String(), body)
+	}
+	if len(resolver.calls) != 1 || store.created[0].FaviconPath != resolver.path {
+		t.Fatalf("calls=%#v stored=%#v", resolver.calls, store.created)
+	}
+}
+
+func TestControllerList_FetchesMissingFavicon(t *testing.T) {
+	userID := uuid.New()
+	monitorID := uuid.New()
+	store := &fakeStore{listed: []models.Monitor{{ID: monitorID, UserID: userID, URL: "https://example.com", IntervalSeconds: 60}}}
+	resolver := &fakeFaviconResolver{path: "/uploads/favicons/site.png"}
+	routes := http.NewServeMux()
+	NewController(fakeAuthenticator{userID: userID}, store, resolver).RegisterRoutes(routes)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/monitors", nil)
+	recorder := httptest.NewRecorder()
+	routes.ServeHTTP(recorder, request)
+
+	var body []response
+	if recorder.Code != http.StatusOK || json.NewDecoder(recorder.Body).Decode(&body) != nil || len(body) != 1 || body[0].FaviconURL != resolver.path {
+		t.Fatalf("status=%d body=%s decoded=%#v", recorder.Code, recorder.Body.String(), body)
+	}
+	if store.listed[0].FaviconPath != resolver.path {
+		t.Fatalf("stored monitor=%#v", store.listed[0])
 	}
 }

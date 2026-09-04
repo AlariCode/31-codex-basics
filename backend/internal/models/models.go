@@ -36,6 +36,7 @@ type Monitor struct {
 	UserID          uuid.UUID `gorm:"type:uuid;not null;index"`
 	User            User      `gorm:"constraint:OnDelete:CASCADE"`
 	URL             string    `gorm:"not null"`
+	FaviconPath     string    `gorm:"not null;default:''"`
 	IntervalSeconds int       `gorm:"not null"`
 	CreatedAt       time.Time
 	UpdatedAt       time.Time

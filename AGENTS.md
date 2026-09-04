@@ -15,6 +15,11 @@ Details in file: docs/rules/github-flow.md
 
 Use rules in file: docs/rules/pr.md
 
+## Browser work and verification
+
+- For browser interaction in this project, use Playwright MCP.
+- After implementing a task that changes browser-visible behaviour or layout, invoke the `playwright-mcp-qa` skill before reporting completion. It requires a functional and visual verification in Playwright MCP.
+
 ## Комментарии в коде
 
 - Комментируй ПОЧЕМУ, а не что, так как это видно из кода

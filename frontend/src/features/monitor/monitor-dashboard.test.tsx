@@ -14,6 +14,7 @@ vi.mock("@/features/auth/auth-provider", () => ({
 vi.mock("@/features/monitor/api", () => ({
   createMonitor: vi.fn(),
   deleteMonitor: vi.fn(),
+  faviconURL: (path: string) => path ? `http://localhost:8080${path}` : null,
   listMonitors: vi.fn(),
   updateMonitor: vi.fn(),
 }));
@@ -29,9 +30,20 @@ describe("MonitorDashboard", () => {
     await waitFor(() => expect(screen.getByText("Пока нет сайтов. Добавьте первый сайт для мониторинга.")).toBeInTheDocument());
   });
 
+  it("shows the downloaded favicon and replaces a failed image with the default site icon", async () => {
+    vi.mocked(listMonitors).mockResolvedValue([{ id: "1", url: "https://example.com", favicon_url: "/uploads/favicons/site.png", interval_seconds: 300 }]);
+
+    render(<MonitorDashboard />);
+    const favicon = await screen.findByTestId("monitor-favicon");
+    expect(favicon).toHaveAttribute("src", "http://localhost:8080/uploads/favicons/site.png?site=https%3A%2F%2Fexample.com");
+    fireEvent.error(favicon);
+
+    expect(screen.getByTestId("default-site-icon")).toBeInTheDocument();
+  });
+
   it("creates a monitor from the form and displays it", async () => {
     vi.mocked(listMonitors).mockResolvedValue([]);
-    vi.mocked(createMonitor).mockResolvedValue({ id: "1", url: "https://example.com", interval_seconds: 300 });
+    vi.mocked(createMonitor).mockResolvedValue({ id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 300 });
 
     render(<MonitorDashboard />);
     await waitFor(() => expect(screen.getByText("Пока нет сайтов. Добавьте первый сайт для мониторинга.")).toBeInTheDocument());
@@ -45,7 +57,7 @@ describe("MonitorDashboard", () => {
 
   it("displays a created monitor in React Strict Mode", async () => {
     vi.mocked(listMonitors).mockResolvedValue([]);
-    vi.mocked(createMonitor).mockResolvedValue({ id: "1", url: "https://example.com", interval_seconds: 5 });
+    vi.mocked(createMonitor).mockResolvedValue({ id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 5 });
 
     render(<StrictMode><MonitorDashboard /></StrictMode>);
     await waitFor(() => expect(screen.getByText("Пока нет сайтов. Добавьте первый сайт для мониторинга.")).toBeInTheDocument());
@@ -58,8 +70,8 @@ describe("MonitorDashboard", () => {
   });
 
   it("edits a monitor using the prefilled form", async () => {
-    vi.mocked(listMonitors).mockResolvedValue([{ id: "1", url: "https://example.com", interval_seconds: 300 }]);
-    vi.mocked(updateMonitor).mockResolvedValue({ id: "1", url: "https://updated.example", interval_seconds: 600 });
+    vi.mocked(listMonitors).mockResolvedValue([{ id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 300 }]);
+    vi.mocked(updateMonitor).mockResolvedValue({ id: "1", url: "https://updated.example", favicon_url: "", interval_seconds: 600 });
 
     render(<MonitorDashboard />);
     await waitFor(() => expect(screen.getByText("https://example.com")).toBeInTheDocument());
@@ -74,7 +86,7 @@ describe("MonitorDashboard", () => {
   });
 
   it("deletes a monitor after confirmation in the popup", async () => {
-    vi.mocked(listMonitors).mockResolvedValue([{ id: "1", url: "https://example.com", interval_seconds: 300 }]);
+    vi.mocked(listMonitors).mockResolvedValue([{ id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 300 }]);
     vi.mocked(deleteMonitor).mockResolvedValue();
 
     render(<MonitorDashboard />);
@@ -88,7 +100,7 @@ describe("MonitorDashboard", () => {
   });
 
   it("closes the delete popup without deleting", async () => {
-    vi.mocked(listMonitors).mockResolvedValue([{ id: "1", url: "https://example.com", interval_seconds: 300 }]);
+    vi.mocked(listMonitors).mockResolvedValue([{ id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 300 }]);
 
     render(<MonitorDashboard />);
     await waitFor(() => expect(screen.getByText("https://example.com")).toBeInTheDocument());

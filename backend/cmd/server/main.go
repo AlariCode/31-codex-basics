@@ -52,9 +52,10 @@ func main() {
 	routes := http.NewServeMux()
 	controller := auth.NewController(service, auth.HTTPConfig{RefreshTokenTTL: cfg.RefreshTokenTTL, CookieSecure: cfg.CookieSecure, AvatarDir: cfg.AvatarDir})
 	controller.RegisterRoutes(routes)
-	monitor.NewController(service, monitor.NewGormStore(db)).RegisterRoutes(routes)
+	monitor.NewController(service, monitor.NewGormStore(db), monitor.NewFaviconFetcher(cfg.FaviconDir)).RegisterRoutes(routes)
 	routes.Handle("GET /uploads/avatars/", http.StripPrefix("/uploads/avatars/", http.FileServer(http.Dir(cfg.AvatarDir))))
 	routes.Handle("GET /uploads/files/", http.StripPrefix("/uploads/files/", http.FileServer(http.Dir(filepath.Join(cfg.AvatarDir, "..", "files")))))
+	routes.Handle("GET /uploads/favicons/", http.StripPrefix("/uploads/favicons/", http.FileServer(http.Dir(cfg.FaviconDir))))
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: server.WithCORS(cfg.CORSOrigin, routes), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		log.Printf("listening on %s", cfg.HTTPAddr)

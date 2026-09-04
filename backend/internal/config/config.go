@@ -18,6 +18,7 @@ type Config struct {
 	CORSOrigin      string
 	CookieSecure    bool
 	AvatarDir       string
+	FaviconDir      string
 }
 
 // Load reads environment variables, applies safe local defaults, and rejects missing secrets and database settings.
@@ -30,6 +31,7 @@ func Load() (Config, error) {
 		RefreshTokenTTL: durationValue("REFRESH_TOKEN_TTL", 30*24*time.Hour),
 		CORSOrigin:      stringValue("CORS_ORIGIN", "http://localhost:3005"),
 		AvatarDir:       stringValue("AVATAR_DIR", "uploads/avatars"),
+		FaviconDir:      stringValue("FAVICON_DIR", "uploads/favicons"),
 	}
 
 	var err error

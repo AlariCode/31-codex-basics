@@ -1,0 +1,1 @@
+ALTER TABLE monitors ADD COLUMN favicon_path TEXT NOT NULL DEFAULT '';

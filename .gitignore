@@ -1,2 +1,3 @@
 backend/uploads/
 .envrc
+.playwright-mcp

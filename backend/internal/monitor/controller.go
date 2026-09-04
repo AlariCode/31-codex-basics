@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -15,8 +16,9 @@ import (
 
 // Controller keeps monitor HTTP handling dependent on authentication and storage contracts.
 type Controller struct {
-	auth  Authenticator
-	store Store
+	auth     Authenticator
+	store    Store
+	favicons FaviconResolver
 }
 
 // Authenticator lets protected handlers share token validation without coupling them to auth storage.
@@ -32,8 +34,12 @@ const (
 )
 
 // NewController wires monitor HTTP handling to authentication and storage dependencies.
-func NewController(authenticator Authenticator, store Store) *Controller {
-	return &Controller{auth: authenticator, store: store}
+func NewController(authenticator Authenticator, store Store, faviconResolvers ...FaviconResolver) *Controller {
+	var favicons FaviconResolver
+	if len(faviconResolvers) > 0 {
+		favicons = faviconResolvers[0]
+	}
+	return &Controller{auth: authenticator, store: store, favicons: favicons}
 }
 
 // RegisterRoutes exposes only the monitor operations supported by this API version.
@@ -54,6 +60,7 @@ type updateRequest = createRequest
 type response struct {
 	ID              string `json:"id"`
 	URL             string `json:"url"`
+	FaviconURL      string `json:"favicon_url"`
 	IntervalSeconds int    `json:"interval_seconds"`
 }
 
@@ -93,6 +100,7 @@ func (controller *Controller) create(writer http.ResponseWriter, request *http.R
 		writeError(writer, http.StatusInternalServerError, "internal server error")
 		return
 	}
+	controller.refreshFavicon(request.Context(), userID, &value)
 	writeJSON(writer, http.StatusCreated, monitorResponse(value))
 }
 
@@ -117,8 +125,12 @@ func (controller *Controller) list(writer http.ResponseWriter, request *http.Req
 		return
 	}
 	result := make([]response, 0, len(monitors))
-	for _, value := range monitors {
-		result = append(result, monitorResponse(value))
+	for index := range monitors {
+		value := &monitors[index]
+		if value.FaviconPath == "" {
+			controller.refreshFavicon(request.Context(), userID, value)
+		}
+		result = append(result, monitorResponse(*value))
 	}
 	writeJSON(writer, http.StatusOK, result)
 }
@@ -161,6 +173,7 @@ func (controller *Controller) update(writer http.ResponseWriter, request *http.R
 		writeError(writer, http.StatusInternalServerError, "internal server error")
 		return
 	}
+	controller.refreshFavicon(request.Context(), userID, &value)
 	writeJSON(writer, http.StatusOK, monitorResponse(value))
 }
 
@@ -237,7 +250,21 @@ func validMonitorInput(value createRequest) bool {
 }
 
 func monitorResponse(value models.Monitor) response {
-	return response{ID: value.ID.String(), URL: value.URL, IntervalSeconds: value.IntervalSeconds}
+	return response{ID: value.ID.String(), URL: value.URL, FaviconURL: value.FaviconPath, IntervalSeconds: value.IntervalSeconds}
+}
+
+func (controller *Controller) refreshFavicon(ctx context.Context, userID uuid.UUID, value *models.Monitor) {
+	if controller.favicons == nil {
+		return
+	}
+	faviconPath, err := controller.favicons.Fetch(ctx, value.URL, value.ID)
+	if err != nil {
+		faviconPath = ""
+	}
+	if err := controller.store.UpdateFavicon(ctx, userID, value.ID, faviconPath); err != nil {
+		return
+	}
+	value.FaviconPath = faviconPath
 }
 
 func writeError(writer http.ResponseWriter, status int, message string) {

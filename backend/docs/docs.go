@@ -838,6 +838,9 @@ const docTemplate = `{
         "monitor.response": {
             "type": "object",
             "properties": {
+                "favicon_url": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },

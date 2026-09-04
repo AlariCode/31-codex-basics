@@ -19,6 +19,7 @@ type Store interface {
 	Create(context.Context, models.Monitor) error
 	List(context.Context, uuid.UUID) ([]models.Monitor, error)
 	Update(context.Context, uuid.UUID, models.Monitor) error
+	UpdateFavicon(context.Context, uuid.UUID, uuid.UUID, string) error
 	Delete(context.Context, uuid.UUID, uuid.UUID) error
 }
 
@@ -46,6 +47,21 @@ func (store *GormStore) Update(ctx context.Context, userID uuid.UUID, value mode
 		Model(&models.Monitor{}).
 		Where("id = ? AND user_id = ?", value.ID, userID).
 		Updates(map[string]any{"url": value.URL, "interval_seconds": value.IntervalSeconds})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// UpdateFavicon stores the locally served favicon path for a monitor owned by the user.
+func (store *GormStore) UpdateFavicon(ctx context.Context, userID, monitorID uuid.UUID, faviconPath string) error {
+	result := store.db.WithContext(ctx).
+		Model(&models.Monitor{}).
+		Where("id = ? AND user_id = ?", monitorID, userID).
+		Update("favicon_path", faviconPath)
 	if result.Error != nil {
 		return result.Error
 	}
