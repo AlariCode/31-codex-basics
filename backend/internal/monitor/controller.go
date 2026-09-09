@@ -8,17 +8,21 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"uptime-backend/internal/models"
+	"uptime-backend/internal/publichttp"
 
 	"github.com/google/uuid"
 )
 
 // Controller keeps monitor HTTP handling dependent on authentication and storage contracts.
 type Controller struct {
-	auth     Authenticator
-	store    Store
-	favicons FaviconResolver
+	auth       Authenticator
+	store      Store
+	favicons   FaviconResolver
+	scheduler  *Scheduler
+	statistics statisticsStore
 }
 
 // Authenticator lets protected handlers share token validation without coupling them to auth storage.
@@ -45,6 +49,7 @@ func NewController(authenticator Authenticator, store Store, faviconResolvers ..
 // RegisterRoutes exposes only the monitor operations supported by this API version.
 func (controller *Controller) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/monitors", controller.list)
+	mux.HandleFunc("GET /api/v1/monitors/stats", controller.stats)
 	mux.HandleFunc("POST /api/v1/monitors", controller.create)
 	mux.HandleFunc("PATCH /api/v1/monitors/{id}", controller.update)
 	mux.HandleFunc("DELETE /api/v1/monitors/{id}", controller.delete)
@@ -58,15 +63,20 @@ type createRequest struct {
 type updateRequest = createRequest
 
 type response struct {
-	ID              string `json:"id"`
-	URL             string `json:"url"`
-	FaviconURL      string `json:"favicon_url"`
-	IntervalSeconds int    `json:"interval_seconds"`
+	ID              string     `json:"id"`
+	URL             string     `json:"url"`
+	FaviconURL      string     `json:"favicon_url"`
+	IntervalSeconds int        `json:"interval_seconds"`
+	LastCheckedAt   *time.Time `json:"last_checked_at"`
+	LastStatus      string     `json:"last_status" enums:"pending,up,down,blocked"`
+	LastHTTPStatus  *int       `json:"last_http_status"`
+	LastError       string     `json:"last_error"`
 }
 
 // create registers a URL monitor for the authenticated user.
 //
 // @Summary Create a monitor
+// @Description Accepts public HTTP/HTTPS URLs and intervals of 1–604800 seconds. Schedules an immediate GET check after saving.
 // @Tags monitors
 // @Accept json
 // @Produce json
@@ -95,18 +105,32 @@ func (controller *Controller) create(writer http.ResponseWriter, request *http.R
 		writeError(writer, http.StatusBadRequest, "invalid monitor input")
 		return
 	}
-	value := models.Monitor{ID: uuid.New(), UserID: userID, URL: strings.TrimSpace(body.URL), IntervalSeconds: body.IntervalSeconds}
+	value := models.Monitor{
+		ID: uuid.New(), UserID: userID,
+		URL: strings.TrimSpace(body.URL), IntervalSeconds: body.IntervalSeconds,
+	}
 	if err := controller.store.Create(request.Context(), value); err != nil {
 		writeError(writer, http.StatusInternalServerError, "internal server error")
 		return
 	}
+	controller.notifyScheduler()
 	controller.refreshFavicon(request.Context(), userID, &value)
+	// Read persisted state because a fast first check may already have completed.
+	if values, err := controller.store.List(request.Context(), userID); err == nil {
+		for _, saved := range values {
+			if saved.ID == value.ID {
+				value = saved
+				break
+			}
+		}
+	}
 	writeJSON(writer, http.StatusCreated, monitorResponse(value))
 }
 
 // list returns all monitors owned by the authenticated user.
 //
 // @Summary List monitors
+// @Description Includes the latest check result. A pending or blocked monitor has no availability observation; listing never fetches favicons.
 // @Tags monitors
 // @Produce json
 // @Security BearerAuth
@@ -127,9 +151,6 @@ func (controller *Controller) list(writer http.ResponseWriter, request *http.Req
 	result := make([]response, 0, len(monitors))
 	for index := range monitors {
 		value := &monitors[index]
-		if value.FaviconPath == "" {
-			controller.refreshFavicon(request.Context(), userID, value)
-		}
 		result = append(result, monitorResponse(*value))
 	}
 	writeJSON(writer, http.StatusOK, result)
@@ -138,6 +159,7 @@ func (controller *Controller) list(writer http.ResponseWriter, request *http.Req
 // update changes a monitor owned by the authenticated user.
 //
 // @Summary Update a monitor
+// @Description Accepts public HTTP/HTTPS URLs. Restarts checking after saving; preserves availability history even when the URL changes.
 // @Tags monitors
 // @Accept json
 // @Produce json
@@ -164,7 +186,10 @@ func (controller *Controller) update(writer http.ResponseWriter, request *http.R
 	if !ok {
 		return
 	}
-	value := models.Monitor{ID: monitorID, UserID: userID, URL: strings.TrimSpace(body.URL), IntervalSeconds: body.IntervalSeconds}
+	value := models.Monitor{
+		ID: monitorID, UserID: userID,
+		URL: strings.TrimSpace(body.URL), IntervalSeconds: body.IntervalSeconds,
+	}
 	if err := controller.store.Update(request.Context(), userID, value); err != nil {
 		if errors.Is(err, ErrNotFound) {
 			writeError(writer, http.StatusNotFound, "monitor not found")
@@ -173,7 +198,17 @@ func (controller *Controller) update(writer http.ResponseWriter, request *http.R
 		writeError(writer, http.StatusInternalServerError, "internal server error")
 		return
 	}
+	controller.notifyScheduler()
 	controller.refreshFavicon(request.Context(), userID, &value)
+	// Read persisted state because a fast first check may already have completed.
+	if values, err := controller.store.List(request.Context(), userID); err == nil {
+		for _, saved := range values {
+			if saved.ID == value.ID {
+				value = saved
+				break
+			}
+		}
+	}
 	writeJSON(writer, http.StatusOK, monitorResponse(value))
 }
 
@@ -207,6 +242,7 @@ func (controller *Controller) delete(writer http.ResponseWriter, request *http.R
 		writeError(writer, http.StatusInternalServerError, "internal server error")
 		return
 	}
+	controller.notifyScheduler()
 	writer.WriteHeader(http.StatusNoContent)
 }
 
@@ -242,7 +278,14 @@ func validURL(value string) bool {
 		return false
 	}
 	parsed, err := url.ParseRequestURI(strings.TrimSpace(value))
-	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Hostname() != "" && parsed.User == nil
+	if err != nil {
+		return false
+	}
+	if parsed.User != nil {
+		return false
+	}
+	isHTTP := parsed.Scheme == "http" || parsed.Scheme == "https"
+	return isHTTP && publichttp.AllowedHost(parsed.Hostname())
 }
 
 func validMonitorInput(value createRequest) bool {
@@ -250,7 +293,15 @@ func validMonitorInput(value createRequest) bool {
 }
 
 func monitorResponse(value models.Monitor) response {
-	return response{ID: value.ID.String(), URL: value.URL, FaviconURL: value.FaviconPath, IntervalSeconds: value.IntervalSeconds}
+	status := value.LastStatus
+	if status == "" {
+		status = "pending"
+	}
+	return response{
+		ID: value.ID.String(), URL: value.URL, FaviconURL: value.FaviconPath,
+		IntervalSeconds: value.IntervalSeconds, LastCheckedAt: value.LastCheckedAt,
+		LastStatus: status, LastHTTPStatus: value.LastHTTPStatus, LastError: value.LastError,
+	}
 }
 
 func (controller *Controller) refreshFavicon(ctx context.Context, userID uuid.UUID, value *models.Monitor) {
@@ -275,4 +326,17 @@ func writeJSON(writer http.ResponseWriter, status int, body any) {
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(status)
 	_ = json.NewEncoder(writer).Encode(body)
+}
+
+// WithMonitoring wires background scheduling and the authenticated statistics endpoint.
+func (controller *Controller) WithMonitoring(scheduler *Scheduler, store *GormStore) *Controller {
+	controller.scheduler = scheduler
+	controller.statistics = store
+	return controller
+}
+
+func (controller *Controller) notifyScheduler() {
+	if controller.scheduler != nil {
+		controller.scheduler.Notify()
+	}
 }

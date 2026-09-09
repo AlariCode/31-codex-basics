@@ -99,7 +99,7 @@ func (store *fakeStore) Delete(_ context.Context, userID, monitorID uuid.UUID) e
 }
 
 func TestValidURL_AcceptsHTTPAndHTTPS(t *testing.T) {
-	for _, value := range []string{"https://example.com", "http://localhost:8080/health"} {
+	for _, value := range []string{"https://example.com", "http://example.com:8080/health"} {
 		if !validURL(value) {
 			t.Errorf("validURL(%q) = false", value)
 		}
@@ -289,7 +289,7 @@ func TestControllerCreate_StoresAndReturnsFetchedFavicon(t *testing.T) {
 	}
 }
 
-func TestControllerList_FetchesMissingFavicon(t *testing.T) {
+func TestControllerList_DoesNotFetchMissingFavicon(t *testing.T) {
 	userID := uuid.New()
 	monitorID := uuid.New()
 	store := &fakeStore{listed: []models.Monitor{{ID: monitorID, UserID: userID, URL: "https://example.com", IntervalSeconds: 60}}}
@@ -301,10 +301,10 @@ func TestControllerList_FetchesMissingFavicon(t *testing.T) {
 	routes.ServeHTTP(recorder, request)
 
 	var body []response
-	if recorder.Code != http.StatusOK || json.NewDecoder(recorder.Body).Decode(&body) != nil || len(body) != 1 || body[0].FaviconURL != resolver.path {
+	if recorder.Code != http.StatusOK || json.NewDecoder(recorder.Body).Decode(&body) != nil || len(body) != 1 || body[0].FaviconURL != "" {
 		t.Fatalf("status=%d body=%s decoded=%#v", recorder.Code, recorder.Body.String(), body)
 	}
-	if store.listed[0].FaviconPath != resolver.path {
+	if store.listed[0].FaviconPath != "" || len(resolver.calls) != 0 {
 		t.Fatalf("stored monitor=%#v", store.listed[0])
 	}
 }

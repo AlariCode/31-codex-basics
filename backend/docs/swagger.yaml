@@ -54,6 +54,21 @@ definitions:
       url:
         type: string
     type: object
+  monitor.monitorStats:
+    properties:
+      failures:
+        type: integer
+      monitor_id:
+        type: string
+      points:
+        items:
+          $ref: '#/definitions/monitor.statsPoint'
+        type: array
+      successes:
+        type: integer
+      uptime_percent:
+        type: number
+    type: object
   monitor.response:
     properties:
       favicon_url:
@@ -62,7 +77,46 @@ definitions:
         type: string
       interval_seconds:
         type: integer
+      last_checked_at:
+        type: string
+      last_error:
+        type: string
+      last_http_status:
+        type: integer
+      last_status:
+        enum:
+        - pending
+        - up
+        - down
+        - blocked
+        type: string
       url:
+        type: string
+    type: object
+  monitor.statsPoint:
+    properties:
+      end:
+        type: string
+      failures:
+        type: integer
+      start:
+        type: string
+      successes:
+        type: integer
+      uptime_percent:
+        type: number
+    type: object
+  monitor.statsResponse:
+    properties:
+      bucket_seconds:
+        type: integer
+      from:
+        type: string
+      monitors:
+        items:
+          $ref: '#/definitions/monitor.monitorStats'
+        type: array
+      to:
         type: string
     type: object
   monitor.updateRequest:
@@ -200,6 +254,8 @@ paths:
       - auth
   /api/v1/monitors:
     get:
+      description: Includes the latest check result. A pending or blocked monitor
+        has no availability observation; listing never fetches favicons.
       produces:
       - application/json
       responses:
@@ -229,6 +285,8 @@ paths:
     post:
       consumes:
       - application/json
+      description: Accepts public HTTP/HTTPS URLs and intervals of 1–604800 seconds.
+        Schedules an immediate GET check after saving.
       parameters:
       - description: Monitor configuration
         in: body
@@ -309,6 +367,8 @@ paths:
     patch:
       consumes:
       - application/json
+      description: Accepts public HTTP/HTTPS URLs. Restarts checking after saving;
+        preserves availability history even when the URL changes.
       parameters:
       - description: Monitor ID
         in: path
@@ -355,6 +415,52 @@ paths:
       security:
       - BearerAuth: []
       summary: Update a monitor
+      tags:
+      - monitors
+  /api/v1/monitors/stats:
+    get:
+      description: Percentages count completed checks, not elapsed uptime. UTC minute
+        precision; the partially expired oldest minute is excluded. Empty buckets
+        have null uptime_percent.
+      parameters:
+      - default: 24h
+        description: History period
+        enum:
+        - 1h
+        - 24h
+        - 7d
+        - 30d
+        in: query
+        name: period
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/monitor.statsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get monitor availability history
       tags:
       - monitors
   /api/v1/profile:

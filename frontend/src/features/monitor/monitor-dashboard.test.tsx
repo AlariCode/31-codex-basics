@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MonitorDashboard } from "@/features/monitor/monitor-dashboard";
-import { createMonitor, deleteMonitor, listMonitors, updateMonitor } from "@/features/monitor/api";
+import { createMonitor, getMonitorStats, deleteMonitor, listMonitors, updateMonitor } from "@/features/monitor/api";
 
 const { refreshSession } = vi.hoisted(() => ({ refreshSession: vi.fn().mockResolvedValue("new-token") }));
 
@@ -12,6 +12,7 @@ vi.mock("@/features/auth/auth-provider", () => ({
 }));
 
 vi.mock("@/features/monitor/api", () => ({
+  getMonitorStats: vi.fn(),
   createMonitor: vi.fn(),
   deleteMonitor: vi.fn(),
   faviconURL: (path: string) => path ? `http://localhost:8080${path}` : null,
@@ -20,7 +21,28 @@ vi.mock("@/features/monitor/api", () => ({
 }));
 
 describe("MonitorDashboard", () => {
-  beforeEach(() => vi.resetAllMocks());
+
+  it("preserves the previous graph when loading a new period fails", async () => {
+    vi.mocked(listMonitors).mockResolvedValue([{
+      id: "1", url: "https://example.com", interval_seconds: 5, favicon_url: "",
+      last_checked_at: null, last_status: "pending", last_http_status: null, last_error: "",
+    }]);
+    vi.mocked(getMonitorStats).mockResolvedValueOnce({
+      from: "2026-09-07T12:00:00Z", to: "2026-09-08T12:00:00Z", bucket_seconds: 900,
+      monitors: [{ monitor_id: "1", successes: 9, failures: 1, uptime_percent: 90, points: [] }],
+    }).mockRejectedValueOnce(new Error("offline"));
+    render(<MonitorDashboard />);
+    expect(await screen.findByText("90.0%")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Период графика"), { target: { value: "7d" } });
+    expect(await screen.findByText(/Не удалось обновить график/)).toBeInTheDocument();
+    expect(screen.getByText("90.0%")).toBeInTheDocument();
+    expect(screen.getByText(/показан предыдущий график/)).toBeInTheDocument();
+  });
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(getMonitorStats).mockResolvedValue({ from: "", to: "", bucket_seconds: 900, monitors: [] });
+  });
 
   it("shows loading and then the empty state", async () => {
     vi.mocked(listMonitors).mockResolvedValue([]);
@@ -31,7 +53,7 @@ describe("MonitorDashboard", () => {
   });
 
   it("shows the downloaded favicon and replaces a failed image with the default site icon", async () => {
-    vi.mocked(listMonitors).mockResolvedValue([{ id: "1", url: "https://example.com", favicon_url: "/uploads/favicons/site.png", interval_seconds: 300 }]);
+    vi.mocked(listMonitors).mockResolvedValue([{ last_checked_at: null, last_status: "pending", last_http_status: null, last_error: "", id: "1", url: "https://example.com", favicon_url: "/uploads/favicons/site.png", interval_seconds: 300 }]);
 
     render(<MonitorDashboard />);
     const favicon = await screen.findByTestId("monitor-favicon");
@@ -43,7 +65,7 @@ describe("MonitorDashboard", () => {
 
   it("creates a monitor from the form and displays it", async () => {
     vi.mocked(listMonitors).mockResolvedValue([]);
-    vi.mocked(createMonitor).mockResolvedValue({ id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 300 });
+    vi.mocked(createMonitor).mockResolvedValue({ last_checked_at: null, last_status: "pending", last_http_status: null, last_error: "", id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 300 });
 
     render(<MonitorDashboard />);
     await waitFor(() => expect(screen.getByText("Пока нет сайтов. Добавьте первый сайт для мониторинга.")).toBeInTheDocument());
@@ -57,7 +79,7 @@ describe("MonitorDashboard", () => {
 
   it("displays a created monitor in React Strict Mode", async () => {
     vi.mocked(listMonitors).mockResolvedValue([]);
-    vi.mocked(createMonitor).mockResolvedValue({ id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 5 });
+    vi.mocked(createMonitor).mockResolvedValue({ last_checked_at: null, last_status: "pending", last_http_status: null, last_error: "", id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 5 });
 
     render(<StrictMode><MonitorDashboard /></StrictMode>);
     await waitFor(() => expect(screen.getByText("Пока нет сайтов. Добавьте первый сайт для мониторинга.")).toBeInTheDocument());
@@ -70,8 +92,8 @@ describe("MonitorDashboard", () => {
   });
 
   it("edits a monitor using the prefilled form", async () => {
-    vi.mocked(listMonitors).mockResolvedValue([{ id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 300 }]);
-    vi.mocked(updateMonitor).mockResolvedValue({ id: "1", url: "https://updated.example", favicon_url: "", interval_seconds: 600 });
+    vi.mocked(listMonitors).mockResolvedValue([{ last_checked_at: null, last_status: "pending", last_http_status: null, last_error: "", id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 300 }]);
+    vi.mocked(updateMonitor).mockResolvedValue({ last_checked_at: null, last_status: "pending", last_http_status: null, last_error: "", id: "1", url: "https://updated.example", favicon_url: "", interval_seconds: 600 });
 
     render(<MonitorDashboard />);
     await waitFor(() => expect(screen.getByText("https://example.com")).toBeInTheDocument());
@@ -86,7 +108,7 @@ describe("MonitorDashboard", () => {
   });
 
   it("deletes a monitor after confirmation in the popup", async () => {
-    vi.mocked(listMonitors).mockResolvedValue([{ id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 300 }]);
+    vi.mocked(listMonitors).mockResolvedValue([{ last_checked_at: null, last_status: "pending", last_http_status: null, last_error: "", id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 300 }]);
     vi.mocked(deleteMonitor).mockResolvedValue();
 
     render(<MonitorDashboard />);
@@ -100,7 +122,7 @@ describe("MonitorDashboard", () => {
   });
 
   it("closes the delete popup without deleting", async () => {
-    vi.mocked(listMonitors).mockResolvedValue([{ id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 300 }]);
+    vi.mocked(listMonitors).mockResolvedValue([{ last_checked_at: null, last_status: "pending", last_http_status: null, last_error: "", id: "1", url: "https://example.com", favicon_url: "", interval_seconds: 300 }]);
 
     render(<MonitorDashboard />);
     await waitFor(() => expect(screen.getByText("https://example.com")).toBeInTheDocument());

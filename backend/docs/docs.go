@@ -203,6 +203,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Includes the latest check result. A pending or blocked monitor has no availability observation; listing never fetches favicons.",
                 "produces": [
                     "application/json"
                 ],
@@ -246,6 +247,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Accepts public HTTP/HTTPS URLs and intervals of 1–604800 seconds. Schedules an immediate GET check after saving.",
                 "consumes": [
                     "application/json"
                 ],
@@ -272,6 +274,73 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/monitor.response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/monitors/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Percentages count completed checks, not elapsed uptime. UTC minute precision; the partially expired oldest minute is excluded. Empty buckets have null uptime_percent.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "monitors"
+                ],
+                "summary": "Get monitor availability history",
+                "parameters": [
+                    {
+                        "enum": [
+                            "1h",
+                            "24h",
+                            "7d",
+                            "30d"
+                        ],
+                        "type": "string",
+                        "default": "24h",
+                        "description": "History period",
+                        "name": "period",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/monitor.statsResponse"
                         }
                     },
                     "400": {
@@ -372,6 +441,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Accepts public HTTP/HTTPS URLs. Restarts checking after saving; preserves availability history even when the URL changes.",
                 "consumes": [
                     "application/json"
                 ],
@@ -835,6 +905,29 @@ const docTemplate = `{
                 }
             }
         },
+        "monitor.monitorStats": {
+            "type": "object",
+            "properties": {
+                "failures": {
+                    "type": "integer"
+                },
+                "monitor_id": {
+                    "type": "string"
+                },
+                "points": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/monitor.statsPoint"
+                    }
+                },
+                "successes": {
+                    "type": "integer"
+                },
+                "uptime_percent": {
+                    "type": "number"
+                }
+            }
+        },
         "monitor.response": {
             "type": "object",
             "properties": {
@@ -847,7 +940,65 @@ const docTemplate = `{
                 "interval_seconds": {
                     "type": "integer"
                 },
+                "last_checked_at": {
+                    "type": "string"
+                },
+                "last_error": {
+                    "type": "string"
+                },
+                "last_http_status": {
+                    "type": "integer"
+                },
+                "last_status": {
+                    "type": "string",
+                    "enum": [
+                        "pending",
+                        "up",
+                        "down",
+                        "blocked"
+                    ]
+                },
                 "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "monitor.statsPoint": {
+            "type": "object",
+            "properties": {
+                "end": {
+                    "type": "string"
+                },
+                "failures": {
+                    "type": "integer"
+                },
+                "start": {
+                    "type": "string"
+                },
+                "successes": {
+                    "type": "integer"
+                },
+                "uptime_percent": {
+                    "type": "number"
+                }
+            }
+        },
+        "monitor.statsResponse": {
+            "type": "object",
+            "properties": {
+                "bucket_seconds": {
+                    "type": "integer"
+                },
+                "from": {
+                    "type": "string"
+                },
+                "monitors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/monitor.monitorStats"
+                    }
+                },
+                "to": {
                     "type": "string"
                 }
             }

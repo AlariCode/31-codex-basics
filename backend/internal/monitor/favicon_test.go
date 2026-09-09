@@ -36,7 +36,7 @@ func TestFaviconFetcherFetch_PrefersLinkedPNGAndCachesIt(t *testing.T) {
 
 	directory := t.TempDir()
 	monitorID := uuid.New()
-	path, err := NewFaviconFetcher(directory).Fetch(context.Background(), server.URL, monitorID)
+	path, err := localFaviconFetcher(directory).Fetch(context.Background(), server.URL, monitorID)
 	if err != nil {
 		t.Fatalf("Fetch() error = %v", err)
 	}
@@ -59,7 +59,7 @@ func TestFaviconFetcherFetch_RemovesObsoleteIconWhenNoPNGExists(t *testing.T) {
 	if err := os.WriteFile(previousPath, []byte("old icon"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := NewFaviconFetcher(directory).Fetch(context.Background(), server.URL, monitorID)
+	_, err := localFaviconFetcher(directory).Fetch(context.Background(), server.URL, monitorID)
 	if err == nil {
 		t.Fatal("Fetch() error = nil")
 	}
@@ -77,4 +77,10 @@ func testPNG(t *testing.T, pixel color.Color) []byte {
 		t.Fatal(err)
 	}
 	return result.Bytes()
+}
+
+func localFaviconFetcher(directory string) *FaviconFetcher {
+	fetcher := NewFaviconFetcher(directory)
+	fetcher.client.Transport = http.DefaultTransport
+	return fetcher
 }

@@ -38,6 +38,11 @@ type Monitor struct {
 	URL             string    `gorm:"not null"`
 	FaviconPath     string    `gorm:"not null;default:''"`
 	IntervalSeconds int       `gorm:"not null"`
+	ConfigVersion   int64     `gorm:"not null;default:1"`
+	LastCheckedAt   *time.Time
+	LastStatus      string `gorm:"not null;default:pending"`
+	LastHTTPStatus  *int
+	LastError       string `gorm:"not null;default:''"`
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }

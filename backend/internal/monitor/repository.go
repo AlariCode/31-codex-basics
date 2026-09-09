@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var ErrInvalidInput = errors.New("invalid monitor input")
@@ -43,17 +44,28 @@ func (store *GormStore) List(ctx context.Context, userID uuid.UUID) ([]models.Mo
 
 // Update changes only the editable fields of a monitor owned by the user.
 func (store *GormStore) Update(ctx context.Context, userID uuid.UUID, value models.Monitor) error {
-	result := store.db.WithContext(ctx).
-		Model(&models.Monitor{}).
-		Where("id = ? AND user_id = ?", value.ID, userID).
-		Updates(map[string]any{"url": value.URL, "interval_seconds": value.IntervalSeconds})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return ErrNotFound
-	}
-	return nil
+	return store.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var current models.Monitor
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND user_id = ?", value.ID, userID).First(&current).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		updates := map[string]any{
+			"url": value.URL, "interval_seconds": value.IntervalSeconds,
+			"config_version": current.ConfigVersion + 1,
+		}
+		if current.URL != value.URL {
+			updates["last_checked_at"] = nil
+			updates["last_status"] = "pending"
+			updates["last_http_status"] = nil
+			updates["last_error"] = ""
+		}
+		return tx.Model(&current).Updates(updates).Error
+	})
 }
 
 // UpdateFavicon stores the locally served favicon path for a monitor owned by the user.

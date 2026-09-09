@@ -52,7 +52,14 @@ func main() {
 	routes := http.NewServeMux()
 	controller := auth.NewController(service, auth.HTTPConfig{RefreshTokenTTL: cfg.RefreshTokenTTL, CookieSecure: cfg.CookieSecure, AvatarDir: cfg.AvatarDir})
 	controller.RegisterRoutes(routes)
-	monitor.NewController(service, monitor.NewGormStore(db), monitor.NewFaviconFetcher(cfg.FaviconDir)).RegisterRoutes(routes)
+	monitorStore := monitor.NewGormStore(db)
+	scheduler := monitor.NewScheduler(monitorStore, monitor.NewChecker())
+	monitor.NewController(service, monitorStore, monitor.NewFaviconFetcher(cfg.FaviconDir)).
+		WithMonitoring(scheduler, monitorStore).RegisterRoutes(routes)
+	signalContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	schedulerDone := make(chan struct{})
+	go func() { defer close(schedulerDone); scheduler.Run(signalContext) }()
 	routes.Handle("GET /uploads/avatars/", http.StripPrefix("/uploads/avatars/", http.FileServer(http.Dir(cfg.AvatarDir))))
 	routes.Handle("GET /uploads/files/", http.StripPrefix("/uploads/files/", http.FileServer(http.Dir(filepath.Join(cfg.AvatarDir, "..", "files")))))
 	routes.Handle("GET /uploads/favicons/", http.StripPrefix("/uploads/favicons/", http.FileServer(http.Dir(cfg.FaviconDir))))
@@ -63,9 +70,8 @@ func main() {
 			log.Fatalf("serve HTTP: %v", err)
 		}
 	}()
-	signalContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	<-signalContext.Done()
+	<-schedulerDone
 	shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutdownContext); err != nil {

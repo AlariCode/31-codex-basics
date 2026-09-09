@@ -7,6 +7,10 @@ export type Monitor = {
   url: string;
   favicon_url: string;
   interval_seconds: number;
+  last_checked_at: string | null;
+  last_status: "pending" | "up" | "down" | "blocked";
+  last_http_status: number | null;
+  last_error: string;
 };
 
 export function faviconURL(path: string): string | null {
@@ -42,4 +46,33 @@ export async function deleteMonitor(refreshAccessToken: RefreshAccessToken, moni
     url: `/api/v1/monitors/${monitorID}`,
     signal,
   }, refreshAccessToken);
+}
+
+export type MonitorPeriod = "1h" | "24h" | "7d" | "30d";
+
+export type StatsPoint = {
+  start: string;
+  end: string;
+  successes: number;
+  failures: number;
+  uptime_percent: number | null;
+};
+
+export type MonitorStats = {
+  monitor_id: string;
+  successes: number;
+  failures: number;
+  uptime_percent: number | null;
+  points: StatsPoint[];
+};
+
+export type StatsResponse = {
+  from: string;
+  to: string;
+  bucket_seconds: number;
+  monitors: MonitorStats[];
+};
+
+export function getMonitorStats(refreshAccessToken: RefreshAccessToken, period: MonitorPeriod, signal?: AbortSignal): Promise<StatsResponse> {
+  return requestWithAuth<StatsResponse>({ method: "GET", url: "/api/v1/monitors/stats", params: { period }, signal }, refreshAccessToken);
 }

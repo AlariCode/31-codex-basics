@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/net/html"
+	"uptime-backend/internal/publichttp"
 )
 
 const (
@@ -38,18 +39,14 @@ type FaviconFetcher struct {
 
 // NewFaviconFetcher creates a favicon resolver that stores images in directory.
 func NewFaviconFetcher(directory string) *FaviconFetcher {
-	return &FaviconFetcher{
-		directory: directory,
-		client: &http.Client{
-			Timeout: 5 * time.Second,
-			CheckRedirect: func(_ *http.Request, via []*http.Request) error {
-				if len(via) > 3 {
-					return errors.New("too many redirects")
-				}
-				return nil
-			},
-		},
+	client := publichttp.NewClient(5 * time.Second)
+	client.CheckRedirect = func(_ *http.Request, via []*http.Request) error {
+		if len(via) > 3 {
+			return errors.New("too many redirects")
+		}
+		return nil
 	}
+	return &FaviconFetcher{directory: directory, client: client}
 }
 
 // Fetch downloads the site's PNG favicon and returns its local public URL.
